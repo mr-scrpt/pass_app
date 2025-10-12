@@ -85,13 +85,13 @@ class SecretListItem(QWidget):
         
         # Namespace label with colored bracket
         ns_label = QLabel(f"[{namespace}]")
-        ns_label.setStyleSheet(f"color: {namespace_color}; font-size: 15px;")
+        ns_label.setStyleSheet(f"color: {namespace_color}; font-size: 16px;")
         ns_label.setAlignment(Qt.AlignVCenter)
         layout.addWidget(ns_label)
         
         # Resource label - bold
         resource_label = QLabel(resource)
-        resource_label.setStyleSheet(f"color: {extra['primaryTextColor']}; font-size: 15px; font-weight: bold;")
+        resource_label.setStyleSheet(f"color: {extra['primaryTextColor']}; font-size: 16px; font-weight: bold;")
         resource_label.setWordWrap(False)
         resource_label.setAlignment(Qt.AlignVCenter)
         layout.addWidget(resource_label, stretch=1)
@@ -182,36 +182,56 @@ class SecretDetailWidget(QWidget):
             self._focus_field(0)
 
     def _add_form_row(self, key, value, is_password=False):
-        # Label
+        # Container for the entire row (for border styling)
+        row_container = QWidget()
+        row_container.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border-left: 3px solid transparent;
+                padding-left: 8px;
+            }
+        """)
+        container_layout = QHBoxLayout(row_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(12)
+        
+        # Label with fixed width for alignment
         label = QLabel(f"{key}:")
-        label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 14px; font-weight: bold;")
+        label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;")
+        label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+        label.setFixedWidth(150)
+        container_layout.addWidget(label)
         
         # Value row with controls
-        row_widget = QWidget()
-        row_layout = QHBoxLayout(row_widget)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(8)
+        value_widget = QWidget()
+        value_widget.setStyleSheet("border: none;")
+        value_layout = QHBoxLayout(value_widget)
+        value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.setSpacing(8)
         
         line_edit = QLineEdit(value)
         line_edit.setReadOnly(True)
         line_edit.setStyleSheet("""
             QLineEdit {
-                font-size: 14px;
+                font-size: 16px;
                 padding: 8px;
                 border: 2px solid transparent;
+                background-color: rgba(255, 255, 255, 0.05);
             }
             QLineEdit:focus {
                 border: 2px solid #89b4fa;
-                background-color: rgba(137, 180, 250, 0.1);
+                background-color: rgba(255, 255, 255, 0.05);
             }
         """)
         if is_password:
             line_edit.setEchoMode(QLineEdit.Password)
         
-        # Install event filter on line_edit to capture key events
+        # Install event filter and connect focus events
         line_edit.installEventFilter(self)
         line_edit.setFocusPolicy(Qt.StrongFocus)
-        row_layout.addWidget(line_edit, stretch=1)
+        line_edit.focusInEvent = lambda e, container=row_container: self._on_field_focus_in(e, container)
+        line_edit.focusOutEvent = lambda e, container=row_container: self._on_field_focus_out(e, container)
+        value_layout.addWidget(line_edit, stretch=1)
         
         # Toggle button with icon only
         toggle_button = QPushButton()
@@ -222,7 +242,7 @@ class SecretDetailWidget(QWidget):
         toggle_button.setToolTip("Toggle Visibility (Ctrl+S)")
         toggle_button.setFixedSize(36, 36)
         toggle_button.clicked.connect(lambda: self._toggle_visibility(line_edit, toggle_button))
-        row_layout.addWidget(toggle_button)
+        value_layout.addWidget(toggle_button)
         
         # Copy button with icon only
         copy_button = QPushButton()
@@ -230,12 +250,36 @@ class SecretDetailWidget(QWidget):
         copy_button.setToolTip("Copy to Clipboard (Ctrl+C)")
         copy_button.setFixedSize(36, 36)
         copy_button.clicked.connect(lambda v=value: self._copy_to_clipboard(v))
-        row_layout.addWidget(copy_button)
+        value_layout.addWidget(copy_button)
         
-        self.form_layout.addRow(label, row_widget)
+        container_layout.addWidget(value_widget, stretch=1)
+        
+        self.form_layout.addRow(row_container)
         
         # Store reference for keyboard navigation
-        self.field_rows.append((line_edit, toggle_button, value))
+        self.field_rows.append((line_edit, toggle_button, value, row_container))
+
+    def _on_field_focus_in(self, event, container):
+        """Highlight the row when field gets focus"""
+        container.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border-left: 3px solid #89b4fa;
+                padding-left: 8px;
+            }
+        """)
+        QLineEdit.focusInEvent(container.findChild(QLineEdit), event)
+
+    def _on_field_focus_out(self, event, container):
+        """Remove highlight when field loses focus"""
+        container.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border-left: 3px solid transparent;
+                padding-left: 8px;
+            }
+        """)
+        QLineEdit.focusOutEvent(container.findChild(QLineEdit), event)
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
@@ -253,7 +297,7 @@ class SecretDetailWidget(QWidget):
     def _focus_field(self, index):
         if 0 <= index < len(self.field_rows):
             self.current_field_index = index
-            line_edit, _, _ = self.field_rows[index]
+            line_edit, _, _, _ = self.field_rows[index]
             line_edit.setFocus()
             line_edit.selectAll()
 
@@ -264,12 +308,12 @@ class SecretDetailWidget(QWidget):
             modifiers = event.modifiers()
             
             # Check if event is from one of our line edits
-            is_our_field = any(obj == line_edit for line_edit, _, _ in self.field_rows)
+            is_our_field = any(obj == line_edit for line_edit, _, _, _ in self.field_rows)
             if not is_our_field:
                 return super().eventFilter(obj, event)
             
             # Update current field index
-            for i, (line_edit, _, _) in enumerate(self.field_rows):
+            for i, (line_edit, _, _, _) in enumerate(self.field_rows):
                 if obj == line_edit:
                     self.current_field_index = i
                     break
@@ -289,12 +333,12 @@ class SecretDetailWidget(QWidget):
             elif modifiers == Qt.ControlModifier:
                 if key == Qt.Key_C:
                     # Copy current field value
-                    _, _, value = self.field_rows[self.current_field_index]
+                    _, _, value, _ = self.field_rows[self.current_field_index]
                     self._copy_to_clipboard(value)
                     return True
                 elif key == Qt.Key_S:
                     # Toggle visibility of current field
-                    line_edit, toggle_button, _ = self.field_rows[self.current_field_index]
+                    line_edit, toggle_button, _, _ = self.field_rows[self.current_field_index]
                     self._toggle_visibility(line_edit, toggle_button)
                     return True
         
