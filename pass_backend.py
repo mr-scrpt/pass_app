@@ -4,142 +4,124 @@ import json
 import os
 from collections import defaultdict
 
-# For now, we use a local mock password store.
-# In the future, this will be replaced with the real path.
-PASSWORD_STORE_PATH = os.path.join(os.path.dirname(__file__), '.password-store')
+# --- CONFIGURATION ---
+# Respect the PASSWORD_STORE_DIR environment variable, just like `pass` does.
+store_dir_from_env = os.environ.get('PASSWORD_STORE_DIR')
+if store_dir_from_env:
+    PASSWORD_STORE_PATH = os.path.expanduser(store_dir_from_env)
+else:
+    PASSWORD_STORE_PATH = os.path.expanduser('~/.password-store')
+
+# --- HELPER FUNCTIONS ---
+
+def handle_error(e, status_msg="error"):
+    """Prints a JSON error message to stderr and exits."""
+    message = e.stderr.strip() if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
+    print(json.dumps({"status": status_msg, "message": message}, indent=2), file=sys.stderr)
+    sys.exit(1)
+
+# --- COMMAND IMPLEMENTATIONS ---
 
 def list_secrets():
-    """
-    Finds all .gpg files, parses them into namespaces and resources,
-    and returns them in the specified JSON format.
-    """
+    """Lists secrets by finding .gpg files in the real password store."""
     try:
-        # The spec explicitly requires using `find` to locate .gpg files.
-        cmd = ["find", PASSWORD_STORE_PATH, "-type", "f", "-name", "*.gpg"]
+        # FIX: Handle case where password store does not exist.
+        if not os.path.isdir(PASSWORD_STORE_PATH):
+            print(json.dumps([])) # Return empty list if store is not initialized
+            return
+
+        # Add -L to follow symbolic links, as the password store can be a symlink.
+        cmd = ["find", "-L", PASSWORD_STORE_PATH, "-type", "f", "-name", "*.gpg"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        
         paths = result.stdout.strip().split('\n')
         
         namespaces_map = defaultdict(list)
-        
         base_path = os.path.join(PASSWORD_STORE_PATH, '')
 
         for path in paths:
-            if not path:
-                continue
-
+            if not path: continue
             relative_path = path.replace(base_path, '', 1)
             resource_path = relative_path.replace('.gpg', '', 1)
-            
-            if os.path.sep not in resource_path:
-                continue
-                
+            if os.path.sep not in resource_path: continue
             parts = resource_path.split(os.path.sep, 1)
-            namespace = parts[0]
-            resource = parts[1]
-            
-            namespaces_map[namespace].append(resource)
+            namespaces_map[parts[0]].append(parts[1])
 
-        dir_cmd = ["find", PASSWORD_STORE_PATH, "-mindepth", "1", "-maxdepth", "1", "-type", "d"]
+        dir_cmd = ["find", "-L", PASSWORD_STORE_PATH, "-mindepth", "1", "-maxdepth", "1", "-type", "d"]
         dir_result = subprocess.run(dir_cmd, capture_output=True, text=True, check=True)
-        dir_paths = dir_result.stdout.strip().split('\n')
 
-        for dir_path in dir_paths:
-            if not dir_path:
-                continue
+        for dir_path in dir_result.stdout.strip().split('\n'):
+            if not dir_path: continue
             namespace = os.path.basename(dir_path)
             if namespace not in namespaces_map:
                 namespaces_map[namespace] = []
 
-        output_json = [
-            {"namespace": ns, "resources": res} for ns, res in sorted(namespaces_map.items())
-        ]
-        
+        output_json = [{"namespace": ns, "resources": res} for ns, res in sorted(namespaces_map.items())]
         print(json.dumps(output_json, indent=2))
 
-    except subprocess.CalledProcessError as e:
-        error_output = {
-            "status": "error",
-            "message": "Failed to execute find command.",
-            "stderr": e.stderr
-        }
-        print(json.dumps(error_output, indent=2), file=sys.stderr)
-        sys.exit(1)
     except Exception as e:
-        error_output = {
-            "status": "error",
-            "message": str(e)
-        }
-        print(json.dumps(error_output, indent=2), file=sys.stderr)
-        sys.exit(1)
+        handle_error(e)
 
 def show_secret():
-    """
-    Reads a JSON object from stdin specifying the secret to show,
-    retrieves its content, parses it, and prints the resulting JSON.
-    """
+    """Shows a secret by calling `pass show`."""
     try:
-        request_data = json.load(sys.stdin)
-        namespace = request_data.get("namespace")
-        resource = request_data.get("resource")
-
-        if not namespace or not resource:
-            raise ValueError("Request must include 'namespace' and 'resource'.")
-
-        resource_path = os.path.join(namespace, resource)
-        secret_file_path = os.path.join(PASSWORD_STORE_PATH, f"{resource_path}.gpg")
-
-        if not os.path.exists(secret_file_path):
-            raise FileNotFoundError(f"Secret '{resource_path}' not found.")
-
-        # In this mock version, we read the file directly.
-        with open(secret_file_path, 'r') as f:
-            content = f.read().strip()
-        
+        data = json.load(sys.stdin)
+        secret_path = os.path.join(data["namespace"], data["resource"])
+        result = subprocess.run(["pass", "show", secret_path], capture_output=True, text=True, check=True)
+        content = result.stdout.strip()
         lines = content.split('\n')
-        if not lines or not lines[0]:
-            raise ValueError("Secret is empty or invalid.")
-
         secret = lines[0]
-        metadata = {}
-        if len(lines) > 1:
-            for line in lines[1:]:
-                if ':' in line:
-                    key, value = line.split(':', 1)
-                    metadata[key.strip()] = value.strip()
-        
-        output_json = {"secret": secret, **metadata}
-        print(json.dumps(output_json, indent=2))
-
-    except (json.JSONDecodeError, ValueError, FileNotFoundError) as e:
-        error_output = {
-            "status": "error",
-            "message": str(e)
-        }
-        print(json.dumps(error_output, indent=2), file=sys.stderr)
-        sys.exit(1)
+        metadata = {k.strip(): v.strip() for line in lines[1:] if ':' in line for k, v in [line.split(':', 1)]}
+        print(json.dumps({"secret": secret, **metadata}, indent=2))
     except Exception as e:
-        error_output = {
-            "status": "error",
-            "message": f"An unexpected error occurred: {e}"
-        }
-        print(json.dumps(error_output, indent=2), file=sys.stderr)
-        sys.exit(1)
+        handle_error(e)
+
+def create_secret():
+    """Creates a secret by calling `pass insert`."""
+    try:
+        data = json.load(sys.stdin)
+        secret_path = os.path.join(data["namespace"], data["resource"])
+        if '/' in data["resource"] or '\'' in data["resource"]:
+            raise ValueError("Resource name cannot contain slashes.")
+        subprocess.run(["pass", "insert", "--multiline", secret_path], input=data["content"], text=True, check=True)
+        print(json.dumps({"status": "success", "path": secret_path}, indent=2))
+    except Exception as e:
+        handle_error(e)
+
+def edit_secret():
+    """Edits a secret by calling `pass edit`."""
+    try:
+        data = json.load(sys.stdin)
+        secret_path = os.path.join(data["namespace"], data["resource"])
+        subprocess.run(["pass", "edit", secret_path], check=True)
+        print(json.dumps({"status": "success", "message": f"Successfully launched editor for '{secret_path}'"}, indent=2))
+    except Exception as e:
+        handle_error(e)
+
+def delete_secret():
+    """Deletes a secret by calling `pass rm --force`."""
+    try:
+        data = json.load(sys.stdin)
+        secret_path = os.path.join(data["namespace"], data["resource"])
+        subprocess.run(["pass", "rm", "--force", secret_path], check=True)
+        print(json.dumps({"status": "success", "message": f"Secret '{secret_path}' deleted." }, indent=2))
+    except Exception as e:
+        handle_error(e)
 
 def main():
-    """
-    Main function to handle command-line arguments.
-    """
+    """Main command router."""
     if len(sys.argv) < 2:
-        print("Usage: python pass_backend.py [list|show|create|edit|delete]", file=sys.stderr)
+        print(f"Usage: python {sys.argv[0]} [list|show|create|edit|delete]", file=sys.stderr)
         sys.exit(1)
-        
     command = sys.argv[1]
-    
-    if command == "list":
-        list_secrets()
-    elif command == "show":
-        show_secret()
+    actions = {
+        "list": list_secrets,
+        "show": show_secret,
+        "create": create_secret,
+        "edit": edit_secret,
+        "delete": delete_secret,
+    }
+    if command in actions:
+        actions[command]()
     else:
         print(f"Command '{command}' not implemented yet.", file=sys.stderr)
         sys.exit(1)
