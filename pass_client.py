@@ -1,9 +1,10 @@
+
 import sys
 import os
 import subprocess
 import json
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -63,7 +64,6 @@ class SecretDetailWidget(QWidget):
         self.main_layout.addStretch()
 
     def populate_data(self, secret_details):
-        # Clear old form widgets
         while self.form_layout.count():
             child = self.form_layout.takeAt(0)
             if child.widget():
@@ -73,37 +73,30 @@ class SecretDetailWidget(QWidget):
             self.form_layout.addRow(QLabel("Could not load secret details."))
             return
 
-        # Handle the main secret first
         secret_value = secret_details.pop("secret", "")
         self._add_form_row("Secret", secret_value, is_password=True)
 
-        # Add other metadata
-        for key, value in secret_details.items():
+        for key, value in sorted(secret_details.items()):
             self._add_form_row(key, value)
 
     def _add_form_row(self, key, value, is_password=False):
         label = QLabel(f"{key}:")
-        
         row_widget = QWidget()
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(0, 0, 0, 0)
-
         line_edit = QLineEdit(value)
         line_edit.setReadOnly(True)
         if is_password:
             line_edit.setEchoMode(QLineEdit.Password)
         row_layout.addWidget(line_edit)
-
         toggle_button = QPushButton("👁")
         toggle_button.setFixedWidth(40)
         toggle_button.clicked.connect(lambda: self._toggle_visibility(line_edit, toggle_button))
         row_layout.addWidget(toggle_button)
-
         copy_button = QPushButton("Copy")
         copy_button.setFixedWidth(60)
         copy_button.clicked.connect(lambda: self._copy_to_clipboard(value))
         row_layout.addWidget(copy_button)
-
         self.form_layout.addRow(label, row_widget)
 
     def _toggle_visibility(self, line_edit, button):
@@ -129,7 +122,6 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
-        # --- Search View (Page 0) ---
         search_view_widget = QWidget()
         search_layout = QVBoxLayout(search_view_widget)
         self.search_bar = QLineEdit()
@@ -139,14 +131,35 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.results_list)
         self.stack.addWidget(search_view_widget)
 
-        # --- Details View (Page 1) ---
         self.details_widget = SecretDetailWidget(back_callback=self._show_search_view)
         self.stack.addWidget(self.details_widget)
 
-        # --- Data Loading & Connections ---
         self.load_data_and_populate()
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
+        self.search_bar.installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        if source == self.search_bar and event.type() == QEvent.KeyPress:
+            key = event.key()
+            if key == Qt.Key_Down:
+                if self.results_list.count() > 0:
+                    current = self.results_list.currentRow()
+                    current = min(current + 1, self.results_list.count() - 1)
+                    self.results_list.setCurrentRow(current)
+                return True
+            elif key == Qt.Key_Up:
+                if self.results_list.count() > 0:
+                    current = self.results_list.currentRow()
+                    current = max(current - 1, 0)
+                    self.results_list.setCurrentRow(current)
+                return True
+            elif key in (Qt.Key_Return, Qt.Key_Enter):
+                if self.results_list.currentItem():
+                    self._on_item_activated(self.results_list.currentItem())
+                return True
+
+        return super().eventFilter(source, event)
 
     def load_data_and_populate(self):
         backend_data = get_list_from_backend()
@@ -169,6 +182,8 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(secret_display)
             item.setData(Qt.UserRole, secret_data)
             self.results_list.addItem(item)
+        if self.results_list.count() > 0:
+            self.results_list.setCurrentRow(0)
 
     def _on_search_changed(self, text):
         if not text:
@@ -187,9 +202,12 @@ class MainWindow(QMainWindow):
 
     def _show_search_view(self):
         self.stack.setCurrentIndex(0)
+        self.search_bar.setFocus()
+        self.search_bar.selectAll()
 
     def _show_details_view(self):
         self.stack.setCurrentIndex(1)
+        self.details_widget.back_button.setFocus()
 
 def main():
     app = QApplication(sys.argv)

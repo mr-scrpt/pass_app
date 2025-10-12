@@ -23,19 +23,19 @@
 
 ## ✅ Done
 
-14. **UI - View Switching Architecture**:
-    *   Implemented a `QStackedWidget` to manage views.
-    *   On `Enter`, the client now correctly fetches secret data from the backend and switches to a placeholder details view.
+15. **UI - Details Form Implemented**:
+    *   Created a dynamic form to display secret details.
+    *   Implemented read-only fields, show/hide visibility toggles, and copy-to-clipboard buttons.
+    *   Verified by the user that the details view works correctly.
 
 ---
 
 ## ➡️ Next Step
 
-*   **UI (`pass_client.py`) - Step 4: Build Details Form**:
-    *   Create a dynamic form widget for the details view.
-    *   When data is received, this form will generate rows for each piece of data (secret, metadata).
-    *   Each row will contain a read-only `QLineEdit`, a show/hide (eyeball) button, and a copy-to-clipboard button.
-    *   The main secret field will be masked by default.
+*   **UI (`pass_client.py`) - UX Improvement: Focusless Navigation**:
+    *   Implement an event filter to allow the search bar to control the list widget.
+    *   When the user presses up/down arrows in the search bar, the selection in the results list will change.
+    *   When the user presses `Enter` in the search bar, it will activate the currently selected item in the list.
 
 ---
 
