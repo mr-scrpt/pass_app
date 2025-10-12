@@ -1,11 +1,10 @@
-
 import sys
 import os
 import subprocess
 import json
 
 # PySide6 imports must come BEFORE qt_material
-from PySide6.QtCore import Qt, QEvent
+from PySide6.QtCore import Qt, QEvent, QSize
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -35,6 +34,20 @@ extra = {
     'secondaryTextColor': '#a6adc8', # Subtext0
 }
 
+# Catppuccin Mocha color palette for namespaces
+CATPPUCCIN_COLORS = [
+    '#f38ba8',  # Red
+    '#fab387',  # Peach
+    '#f9e2af',  # Yellow
+    '#a6e3a1',  # Green
+    '#94e2d5',  # Teal
+    '#89dceb',  # Sky
+    '#89b4fa',  # Blue
+    '#cba6f7',  # Mauve
+    '#f5c2e7',  # Pink
+    '#eba0ac',  # Maroon
+]
+
 # --- Backend Communication ---
 def get_list_from_backend():
     try:
@@ -58,6 +71,35 @@ def get_secret_from_backend(namespace, resource):
     except Exception as e:
         print(f"Error fetching secret from backend: {e}", file=sys.stderr)
         return None
+
+# --- Custom List Item Widget ---
+class SecretListItem(QWidget):
+    def __init__(self, namespace, resource, namespace_color):
+        super().__init__()
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 12, 0)  # Remove top/bottom margins
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignVCenter)  # Center content vertically
+        
+        # Namespace label with colored bracket
+        ns_label = QLabel(f"[{namespace}]")
+        ns_label.setStyleSheet(f"color: {namespace_color}; font-size: 15px;")
+        ns_label.setAlignment(Qt.AlignVCenter)
+        layout.addWidget(ns_label)
+        
+        # Resource label - bold
+        resource_label = QLabel(resource)
+        resource_label.setStyleSheet(f"color: {extra['primaryTextColor']}; font-size: 15px; font-weight: bold;")
+        resource_label.setWordWrap(False)
+        resource_label.setAlignment(Qt.AlignVCenter)
+        layout.addWidget(resource_label, stretch=1)
+        
+        # Set minimum height to ensure content is visible
+        self.setMinimumHeight(44)
+    
+    def sizeHint(self):
+        """Override sizeHint to provide proper size for the list item"""
+        return QSize(self.width(), 44)
 
 # --- Details Form Widget ---
 class SecretDetailWidget(QWidget):
@@ -136,7 +178,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.all_secrets = []
         self.namespace_colors = {}
-        self.color_index = 0
         self.setWindowTitle("Pass Suite")
         self.resize(600, 400)
         self.stack = QStackedWidget()
@@ -148,6 +189,22 @@ class MainWindow(QMainWindow):
         self.search_bar.setPlaceholderText("Search secrets...")
         search_layout.addWidget(self.search_bar)
         self.results_list = QListWidget()
+        
+        # Style the list widget for better selection appearance
+        self.results_list.setStyleSheet("""
+            QListWidget::item {
+                border: none;
+                padding: 0px;
+            }
+            QListWidget::item:selected {
+                background-color: rgba(137, 180, 250, 0.2);
+                border-left: 3px solid #89b4fa;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(137, 180, 250, 0.1);
+            }
+        """)
+        
         search_layout.addWidget(self.results_list)
         self.stack.addWidget(search_view_widget)
 
@@ -178,12 +235,23 @@ class MainWindow(QMainWindow):
             self.results_list.addItem("Error: Could not load secrets.")
             return
         self.all_secrets = []
+        namespaces_seen = []
+        
         for ns_item in backend_data:
             namespace = ns_item.get("namespace", "Unknown")
+            
+            # Assign color to namespace if not yet assigned
+            if namespace not in self.namespace_colors:
+                if namespace not in namespaces_seen:
+                    namespaces_seen.append(namespace)
+                color_index = namespaces_seen.index(namespace) % len(CATPPUCCIN_COLORS)
+                self.namespace_colors[namespace] = CATPPUCCIN_COLORS[color_index]
+            
             for resource_name in ns_item.get("resources", []):
                 plain_text = f"[{namespace}]: {resource_name}"
                 item_data = {"namespace": namespace, "resource": resource_name}
                 self.all_secrets.append((plain_text, item_data))
+        
         self.all_secrets.sort()
         self._populate_list(self.all_secrets)
 
@@ -192,12 +260,22 @@ class MainWindow(QMainWindow):
         for plain_text, secret_data in secrets_to_display:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, secret_data)
-            # Forcibly set a minimum height for the item to prevent clipping
-            item.setSizeHint(QSize(0, 44))
+            
+            # Create custom widget with assigned color
+            ns_color = self.namespace_colors.get(
+                secret_data["namespace"], 
+                extra['secondaryTextColor']
+            )
+            list_item_widget = SecretListItem(
+                secret_data["namespace"], 
+                secret_data["resource"], 
+                ns_color
+            )
+            
+            # CRITICAL: Set item size hint to match widget's size hint
+            item.setSizeHint(list_item_widget.sizeHint())
+            
             self.results_list.addItem(item)
-
-            ns_color = self.namespace_colors.get(secret_data["namespace"], extra['secondaryTextColor'])
-            list_item_widget = SecretListItem(secret_data["namespace"], secret_data["resource"], ns_color)
             self.results_list.setItemWidget(item, list_item_widget)
 
     def _on_search_changed(self, text):
@@ -212,7 +290,7 @@ class MainWindow(QMainWindow):
         if not item_data:
             return
         secret_details = get_secret_from_backend(item_data["namespace"], item_data["resource"])
-        self.details_widget.populate_data(secret_details, item.text())
+        self.details_widget.populate_data(secret_details, f"[{item_data['namespace']}] {item_data['resource']}")
         self._show_details_view()
 
     def _show_search_view(self):
