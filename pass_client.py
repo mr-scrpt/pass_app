@@ -76,12 +76,15 @@ def get_secret_from_backend(namespace, resource):
 
 # --- Custom List Item Widget ---
 class SecretListItem(QWidget):
-    def __init__(self, namespace, resource, namespace_color):
+    def __init__(self, namespace, resource, namespace_color, view_callback, edit_callback):
         super().__init__()
+        self.view_callback = view_callback
+        self.edit_callback = edit_callback
+        
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 0, 12, 0)  # Remove top/bottom margins
+        layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignVCenter)  # Center content vertically
+        layout.setAlignment(Qt.AlignVCenter)
         
         # Namespace label with colored bracket
         ns_label = QLabel(f"[{namespace}]")
@@ -96,12 +99,248 @@ class SecretListItem(QWidget):
         resource_label.setAlignment(Qt.AlignVCenter)
         layout.addWidget(resource_label, stretch=1)
         
-        # Set minimum height to ensure content is visible
+        # Action buttons container (initially hidden)
+        self.buttons_widget = QWidget()
+        self.buttons_widget.setVisible(False)
+        buttons_layout = QHBoxLayout(self.buttons_widget)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(4)
+        
+        # View button
+        view_btn = QPushButton()
+        view_btn.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
+        view_btn.setToolTip("View (Enter)")
+        view_btn.setFixedSize(32, 32)
+        view_btn.clicked.connect(self.view_callback)
+        buttons_layout.addWidget(view_btn)
+        
+        # Edit button
+        edit_btn = QPushButton()
+        edit_btn.setIcon(qta.icon('fa5s.edit', color=extra['primaryTextColor']))
+        edit_btn.setToolTip("Edit (Ctrl+E)")
+        edit_btn.setFixedSize(32, 32)
+        edit_btn.clicked.connect(self.edit_callback)
+        buttons_layout.addWidget(edit_btn)
+        
+        layout.addWidget(self.buttons_widget)
+        
         self.setMinimumHeight(44)
     
+    def set_selected(self, selected):
+        """Show/hide buttons based on selection state"""
+        self.buttons_widget.setVisible(selected)
+    
     def sizeHint(self):
-        """Override sizeHint to provide proper size for the list item"""
         return QSize(self.width(), 44)
+
+# --- Edit Form Widget ---
+class SecretEditWidget(QWidget):
+    def __init__(self, back_callback, save_callback):
+        super().__init__()
+        self.back_callback = back_callback
+        self.save_callback = save_callback
+        self.field_rows = []  # List of (key_edit, value_edit, delete_button, row_container) tuples
+        self.current_field_index = 0
+        self.namespace = ""
+        self.resource = ""
+        
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Header
+        header_widget = QWidget()
+        header_widget.setStyleSheet(f"background-color: {extra['secondaryColor']}; padding: 12px;")
+        header_layout = QHBoxLayout(header_widget)
+        
+        self.back_button = QPushButton()
+        self.back_button.setIcon(qta.icon('fa5s.arrow-left', color=extra['primaryColor']))
+        self.back_button.setToolTip("Back (Esc)")
+        self.back_button.setFixedSize(40, 40)
+        self.back_button.clicked.connect(back_callback)
+        header_layout.addWidget(self.back_button)
+        
+        self.title_label = QLabel("")
+        self.title_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16pt; font-weight: bold;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(self.title_label, stretch=1)
+        
+        # Action buttons
+        self.add_field_button = QPushButton()
+        self.add_field_button.setIcon(qta.icon('fa5s.plus', color='#a6e3a1'))
+        self.add_field_button.setToolTip("Add Field (Ctrl+N)")
+        self.add_field_button.setFixedSize(40, 40)
+        self.add_field_button.clicked.connect(self._add_new_field)
+        header_layout.addWidget(self.add_field_button)
+        
+        self.save_button = QPushButton()
+        self.save_button.setIcon(qta.icon('fa5s.save', color='#a6e3a1'))
+        self.save_button.setToolTip("Save (Ctrl+S)")
+        self.save_button.setFixedSize(40, 40)
+        self.save_button.clicked.connect(self._save_changes)
+        header_layout.addWidget(self.save_button)
+        
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #a6e3a1; font-size: 13px;")
+        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_label.setFixedWidth(100)
+        header_layout.addWidget(self.status_label)
+        
+        self.main_layout.addWidget(header_widget)
+        
+        # Scrollable form area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        
+        self.form_container = QWidget()
+        self.form_layout = QVBoxLayout(self.form_container)
+        self.form_layout.setSpacing(15)
+        self.form_layout.setContentsMargins(20, 20, 20, 20)
+        
+        scroll_area.setWidget(self.form_container)
+        self.main_layout.addWidget(scroll_area)
+
+    def populate_data(self, secret_details, secret_name, namespace, resource):
+        self.title_label.setText(f"Edit: {secret_name}")
+        self.namespace = namespace
+        self.resource = resource
+        
+        # Clear existing fields
+        while self.form_layout.count():
+            child = self.form_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.field_rows = []
+        
+        if not secret_details:
+            return
+        
+        # Add secret field first
+        secret_value = secret_details.pop("secret", "")
+        if secret_value:
+            self._add_field_row("secret", secret_value, is_secret=True)
+        
+        # Add other fields
+        for key, value in sorted(secret_details.items()):
+            self._add_field_row(key, value)
+
+    def _add_field_row(self, key="", value="", is_secret=False):
+        row_container = QWidget()
+        row_container.setStyleSheet("""
+            QWidget {
+                background-color: rgba(255, 255, 255, 0.03);
+                border-left: 3px solid transparent;
+                padding: 8px;
+                border-radius: 4px;
+            }
+        """)
+        container_layout = QHBoxLayout(row_container)
+        container_layout.setSpacing(12)
+        
+        # Key input
+        key_edit = QLineEdit(key)
+        key_edit.setPlaceholderText("Field name...")
+        key_edit.setReadOnly(is_secret)
+        key_edit.setStyleSheet(f"""
+            QLineEdit {{
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+                border: 2px solid transparent;
+                background-color: {'rgba(255, 255, 255, 0.05)' if not is_secret else 'rgba(137, 180, 250, 0.1)'};
+                color: {extra['primaryColor']};
+            }}
+            QLineEdit:focus {{
+                border: 2px solid #89b4fa;
+            }}
+        """)
+        key_edit.setFixedWidth(200)
+        key_edit.installEventFilter(self)
+        container_layout.addWidget(key_edit)
+        
+        # Value input
+        value_edit = QLineEdit(value)
+        value_edit.setPlaceholderText("Value...")
+        value_edit.setStyleSheet("""
+            QLineEdit {
+                font-size: 16px;
+                padding: 8px;
+                border: 2px solid transparent;
+                background-color: rgba(255, 255, 255, 0.05);
+            }
+            QLineEdit:focus {
+                border: 2px solid #89b4fa;
+            }
+        """)
+        value_edit.installEventFilter(self)
+        container_layout.addWidget(value_edit, stretch=1)
+        
+        # Delete button (not for secret field)
+        if not is_secret:
+            delete_btn = QPushButton()
+            delete_btn.setIcon(qta.icon('fa5s.trash', color='#f38ba8'))
+            delete_btn.setToolTip("Delete field")
+            delete_btn.setFixedSize(36, 36)
+            delete_btn.clicked.connect(lambda: self._delete_field(row_container))
+            container_layout.addWidget(delete_btn)
+        else:
+            delete_btn = None
+        
+        self.form_layout.addWidget(row_container)
+        self.field_rows.append((key_edit, value_edit, delete_btn, row_container))
+
+    def _add_new_field(self):
+        self._add_field_row("", "")
+        if self.field_rows:
+            self.field_rows[-1][0].setFocus()
+        self._show_status("Field added")
+
+    def _delete_field(self, row_container):
+        # Find and remove the field
+        for i, (_, _, _, container) in enumerate(self.field_rows):
+            if container == row_container:
+                self.field_rows.pop(i)
+                container.deleteLater()
+                self._show_status("Field deleted")
+                break
+
+    def _save_changes(self):
+        # Collect all field data
+        data = {}
+        for key_edit, value_edit, _, _ in self.field_rows:
+            key = key_edit.text().strip()
+            value = value_edit.text().strip()
+            if key:  # Only save non-empty keys
+                data[key] = value
+        
+        # Call save callback
+        self.save_callback(self.namespace, self.resource, data)
+        self._show_status("✓ Saved!")
+
+    def _show_status(self, message):
+        self.status_label.setText(message)
+        QTimer.singleShot(2000, lambda: self.status_label.setText(""))
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            key = event.key()
+            modifiers = event.modifiers()
+            
+            if key == Qt.Key_Escape:
+                self.back_button.click()
+                return True
+            elif modifiers == Qt.ControlModifier:
+                if key == Qt.Key_S:
+                    self._save_changes()
+                    return True
+                elif key == Qt.Key_N:
+                    self._add_new_field()
+                    return True
+        
+        return super().eventFilter(obj, event)
+
 
 # --- Details Form Widget ---
 class SecretDetailWidget(QWidget):
@@ -350,6 +589,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.all_secrets = []
         self.namespace_colors = {}
+        self.current_selected_item = None
         self.setWindowTitle("Pass Suite")
         self.resize(600, 400)
         self.stack = QStackedWidget()
@@ -382,22 +622,34 @@ class MainWindow(QMainWindow):
 
         self.details_widget = SecretDetailWidget(back_callback=self._show_search_view)
         self.stack.addWidget(self.details_widget)
+        
+        self.edit_widget = SecretEditWidget(
+            back_callback=self._show_search_view,
+            save_callback=self._save_secret
+        )
+        self.stack.addWidget(self.edit_widget)
 
         self.load_data_and_populate()
         self.search_bar.textChanged.connect(self._on_search_changed)
-        self.results_list.itemActivated.connect(self._on_item_activated)
+        self.results_list.itemActivated.connect(lambda item: self._on_item_activated(item, edit=False))
+        self.results_list.currentItemChanged.connect(self._on_selection_changed)
         self.search_bar.installEventFilter(self)
 
     def eventFilter(self, source, event):
         if source == self.search_bar and event.type() == QEvent.KeyPress:
             key = event.key()
+            modifiers = event.modifiers()
             if key in (Qt.Key_Down, Qt.Key_Up):
                 self.results_list.setFocus()
                 QApplication.sendEvent(self.results_list, event)
                 return True
             elif key in (Qt.Key_Return, Qt.Key_Enter):
                 if self.results_list.currentItem():
-                    self._on_item_activated(self.results_list.currentItem())
+                    self._on_item_activated(self.results_list.currentItem(), edit=False)
+                return True
+            elif modifiers == Qt.ControlModifier and key == Qt.Key_E:
+                if self.results_list.currentItem():
+                    self._on_item_activated(self.results_list.currentItem(), edit=True)
                 return True
         return super().eventFilter(source, event)
 
@@ -438,10 +690,14 @@ class MainWindow(QMainWindow):
                 secret_data["namespace"], 
                 extra['secondaryTextColor']
             )
+            
+            # Store item reference for callbacks
             list_item_widget = SecretListItem(
                 secret_data["namespace"], 
                 secret_data["resource"], 
-                ns_color
+                ns_color,
+                view_callback=lambda checked=False, i=item: self._view_secret_from_item(i),
+                edit_callback=lambda checked=False, i=item: self._edit_secret_from_item(i)
             )
             
             # CRITICAL: Set item size hint to match widget's size hint
@@ -450,6 +706,22 @@ class MainWindow(QMainWindow):
             self.results_list.addItem(item)
             self.results_list.setItemWidget(item, list_item_widget)
 
+    def _on_selection_changed(self, current, previous):
+        """Update button visibility when selection changes"""
+        # Hide buttons on previous item
+        if previous:
+            prev_widget = self.results_list.itemWidget(previous)
+            if isinstance(prev_widget, SecretListItem):
+                prev_widget.set_selected(False)
+        
+        # Show buttons on current item
+        if current:
+            curr_widget = self.results_list.itemWidget(current)
+            if isinstance(curr_widget, SecretListItem):
+                curr_widget.set_selected(True)
+        
+        self.current_selected_item = current
+
     def _on_search_changed(self, text):
         if not text:
             filtered_secrets = self.all_secrets
@@ -457,13 +729,51 @@ class MainWindow(QMainWindow):
             filtered_secrets = [s_tuple for s_tuple in self.all_secrets if text.lower() in s_tuple[0].lower()]
         self._populate_list(filtered_secrets)
 
-    def _on_item_activated(self, item: QListWidgetItem):
+    def _on_item_activated(self, item: QListWidgetItem, edit=False):
         item_data = item.data(Qt.UserRole)
         if not item_data:
             return
+        
+        if edit:
+            self._edit_secret(item_data)
+        else:
+            self._view_secret(item_data)
+
+    def _view_secret_from_item(self, item):
+        """View secret from item reference (for button callbacks)"""
+        item_data = item.data(Qt.UserRole)
+        if item_data:
+            self._view_secret(item_data)
+
+    def _edit_secret_from_item(self, item):
+        """Edit secret from item reference (for button callbacks)"""
+        item_data = item.data(Qt.UserRole)
+        if item_data:
+            self._edit_secret(item_data)
+
+    def _view_secret(self, item_data):
         secret_details = get_secret_from_backend(item_data["namespace"], item_data["resource"])
-        self.details_widget.populate_data(secret_details, f"[{item_data['namespace']}] {item_data['resource']}")
+        self.details_widget.populate_data(
+            secret_details, 
+            f"[{item_data['namespace']}] {item_data['resource']}"
+        )
         self._show_details_view()
+
+    def _edit_secret(self, item_data):
+        secret_details = get_secret_from_backend(item_data["namespace"], item_data["resource"])
+        self.edit_widget.populate_data(
+            secret_details,
+            f"[{item_data['namespace']}] {item_data['resource']}",
+            item_data["namespace"],
+            item_data["resource"]
+        )
+        self._show_edit_view()
+
+    def _save_secret(self, namespace, resource, data):
+        """Save the edited secret to backend"""
+        # TODO: Implement backend save
+        print(f"Saving {namespace}/{resource}: {data}")
+        # Here you would call a backend function to save the data
 
     def _show_search_view(self):
         self.stack.setCurrentIndex(0)
@@ -474,6 +784,11 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)
+
+    def _show_edit_view(self):
+        self.stack.setCurrentIndex(2)
+        if self.edit_widget.field_rows:
+            self.edit_widget.field_rows[0][1].setFocus()  # Focus value field
 
 def main():
     app = QApplication(sys.argv)
