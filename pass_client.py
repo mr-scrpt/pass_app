@@ -8,17 +8,20 @@ from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
+    QVBoxLayout,
     QHBoxLayout,
-    QSplitter,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QTextEdit,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QStackedWidget,
+    QPushButton,
+    QLabel,
+    QFormLayout,
 )
 
 # --- Backend Communication ---
 
 def get_list_from_backend():
-    """Calls the backend script to get the list of secrets."""
     try:
         python_executable = os.path.join(os.path.dirname(__file__), '.venv', 'bin', 'python')
         backend_script = os.path.join(os.path.dirname(__file__), 'pass_backend.py')
@@ -26,14 +29,10 @@ def get_list_from_backend():
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
     except Exception as e:
-        # In a real app, this should show a proper error dialog
         print(f"Error fetching list from backend: {e}", file=sys.stderr)
-        if isinstance(e, subprocess.CalledProcessError):
-            print(f"Backend stderr:\n{e.stderr}", file=sys.stderr)
         return None
 
 def get_secret_from_backend(namespace, resource):
-    """Calls the backend to get the details of a single secret."""
     try:
         python_executable = os.path.join(os.path.dirname(__file__), '.venv', 'bin', 'python')
         backend_script = os.path.join(os.path.dirname(__file__), 'pass_backend.py')
@@ -41,87 +40,156 @@ def get_secret_from_backend(namespace, resource):
         input_data = json.dumps({"namespace": namespace, "resource": resource})
         result = subprocess.run(cmd, input=input_data, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
-        print(f"Error fetching secret from backend: {e}")
+    except Exception as e:
+        print(f"Error fetching secret from backend: {e}", file=sys.stderr)
         return None
+
+# --- Details Form Widget ---
+
+class SecretDetailWidget(QWidget):
+    def __init__(self, back_callback):
+        super().__init__()
+        self.main_layout = QVBoxLayout(self)
+        
+        self.back_button = QPushButton("<- Back")
+        self.back_button.clicked.connect(back_callback)
+        self.main_layout.addWidget(self.back_button)
+
+        self.form_widget = QWidget()
+        self.form_layout = QFormLayout(self.form_widget)
+        self.form_layout.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.main_layout.addWidget(self.form_widget)
+
+        self.main_layout.addStretch()
+
+    def populate_data(self, secret_details):
+        # Clear old form widgets
+        while self.form_layout.count():
+            child = self.form_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        if not secret_details:
+            self.form_layout.addRow(QLabel("Could not load secret details."))
+            return
+
+        # Handle the main secret first
+        secret_value = secret_details.pop("secret", "")
+        self._add_form_row("Secret", secret_value, is_password=True)
+
+        # Add other metadata
+        for key, value in secret_details.items():
+            self._add_form_row(key, value)
+
+    def _add_form_row(self, key, value, is_password=False):
+        label = QLabel(f"{key}:")
+        
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+
+        line_edit = QLineEdit(value)
+        line_edit.setReadOnly(True)
+        if is_password:
+            line_edit.setEchoMode(QLineEdit.Password)
+        row_layout.addWidget(line_edit)
+
+        toggle_button = QPushButton("👁")
+        toggle_button.setFixedWidth(40)
+        toggle_button.clicked.connect(lambda: self._toggle_visibility(line_edit, toggle_button))
+        row_layout.addWidget(toggle_button)
+
+        copy_button = QPushButton("Copy")
+        copy_button.setFixedWidth(60)
+        copy_button.clicked.connect(lambda: self._copy_to_clipboard(value))
+        row_layout.addWidget(copy_button)
+
+        self.form_layout.addRow(label, row_widget)
+
+    def _toggle_visibility(self, line_edit, button):
+        if line_edit.echoMode() == QLineEdit.Password:
+            line_edit.setEchoMode(QLineEdit.Normal)
+            button.setText("X")
+        else:
+            line_edit.setEchoMode(QLineEdit.Password)
+            button.setText("👁")
+
+    def _copy_to_clipboard(self, text):
+        QApplication.clipboard().setText(text)
 
 # --- Main Window ---
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.all_secrets = []
         self.setWindowTitle("Pass Suite")
-        self.resize(800, 600)
+        self.resize(600, 400)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QHBoxLayout(central_widget)
-        splitter = QSplitter(Qt.Horizontal)
-        layout.addWidget(splitter)
+        self.stack = QStackedWidget()
+        self.setCentralWidget(self.stack)
 
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Namespaces"])
-        splitter.addWidget(self.tree)
+        # --- Search View (Page 0) ---
+        search_view_widget = QWidget()
+        search_layout = QVBoxLayout(search_view_widget)
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search secrets...")
+        search_layout.addWidget(self.search_bar)
+        self.results_list = QListWidget()
+        search_layout.addWidget(self.results_list)
+        self.stack.addWidget(search_view_widget)
 
-        self.details_view = QTextEdit()
-        self.details_view.setReadOnly(True)
-        self.details_view.setFontFamily("monospace")
-        splitter.addWidget(self.details_view)
+        # --- Details View (Page 1) ---
+        self.details_widget = SecretDetailWidget(back_callback=self._show_search_view)
+        self.stack.addWidget(self.details_widget)
 
-        splitter.setSizes([250, 550])
+        # --- Data Loading & Connections ---
+        self.load_data_and_populate()
+        self.search_bar.textChanged.connect(self._on_search_changed)
+        self.results_list.itemActivated.connect(self._on_item_activated)
 
-        self.populate_tree()
-        self.tree.currentItemChanged.connect(self.on_item_selected)
-
-    def populate_tree(self):
-        """Fetches data and populates the tree widget, storing data on each item."""
-        self.tree.clear()
-        data = get_list_from_backend()
-        # If data is None, it indicates a backend error. An empty list is valid.
-        if data is None:
-            error_item = QTreeWidgetItem(self.tree)
-            error_item.setText(0, "Error loading data")
+    def load_data_and_populate(self):
+        backend_data = get_list_from_backend()
+        if backend_data is None:
+            self.results_list.addItem("Error: Could not load secrets.")
             return
-
-        for ns_item in data:
-            namespace_name = ns_item.get("namespace", "Unknown")
-            namespace_node = QTreeWidgetItem(self.tree)
-            namespace_node.setText(0, namespace_name)
-
+        self.all_secrets = []
+        for ns_item in backend_data:
+            namespace = ns_item.get("namespace", "Unknown")
             for resource_name in ns_item.get("resources", []):
-                resource_node = QTreeWidgetItem(namespace_node)
-                resource_node.setText(0, resource_name)
-                # Store the necessary data on the item itself
-                resource_data = {"namespace": namespace_name, "resource": resource_name}
-                resource_node.setData(0, Qt.UserRole, resource_data)
-        
-        self.tree.expandAll()
+                display_text = f"[{namespace}]: {resource_name}"
+                item_data = {"namespace": namespace, "resource": resource_name}
+                self.all_secrets.append((display_text, item_data))
+        self.all_secrets.sort()
+        self._populate_list(self.all_secrets)
 
-    def on_item_selected(self, current_item, previous_item):
-        """Handler for when the selected item in the tree changes."""
-        self.details_view.clear()
-        if not current_item:
+    def _populate_list(self, secrets_to_display):
+        self.results_list.clear()
+        for secret_display, secret_data in secrets_to_display:
+            item = QListWidgetItem(secret_display)
+            item.setData(Qt.UserRole, secret_data)
+            self.results_list.addItem(item)
+
+    def _on_search_changed(self, text):
+        if not text:
+            filtered_secrets = self.all_secrets
+        else:
+            filtered_secrets = [s_tuple for s_tuple in self.all_secrets if text.lower() in s_tuple[0].lower()]
+        self._populate_list(filtered_secrets)
+
+    def _on_item_activated(self, item):
+        item_data = item.data(Qt.UserRole)
+        if not item_data:
             return
+        secret_details = get_secret_from_backend(item_data["namespace"], item_data["resource"])
+        self.details_widget.populate_data(secret_details)
+        self._show_details_view()
 
-        # Retrieve the data we stored on the item
-        item_data = current_item.data(0, Qt.UserRole)
+    def _show_search_view(self):
+        self.stack.setCurrentIndex(0)
 
-        # item_data will be None for top-level namespace nodes
-        if item_data:
-            namespace = item_data["namespace"]
-            resource = item_data["resource"]
-            
-            secret_details = get_secret_from_backend(namespace, resource)
-            
-            if secret_details:
-                # Format the output string
-                secret = secret_details.pop("secret", "[No secret found]")
-                formatted_text = f"{secret}\n\n---\n"
-                for key, value in secret_details.items():
-                    formatted_text += f"{key}: {value}\n"
-                self.details_view.setText(formatted_text)
-            else:
-                self.details_view.setText(f"Could not load secret: {namespace}/{resource}")
+    def _show_details_view(self):
+        self.stack.setCurrentIndex(1)
 
 def main():
     app = QApplication(sys.argv)

@@ -1,47 +1,47 @@
 # Development Log: pass-cli-suite
 
-## ⚠️ Major Pivot: TUI to Desktop GUI
+## ✅ Done
 
-**Decision**: The project requirements have changed from a Terminal UI (TUI) to a full-fledged Graphical User Interface (GUI) desktop application.
+1.  **Backend (`pass_backend.py`) - Fully Complete & Verified**:
+    *   Implemented all commands (`list`, `show`, `create`, `edit`, `delete`) using the real `pass` utility.
+    *   Fixed bugs related to non-existent password stores and symlinks.
+    *   Verified all testable commands via the terminal.
 
-*   **Old Technology (Client)**: `prompt_toolkit` (Discarded).
-*   **New Technology (Client)**: `PySide6` (Qt for Python).
-*   **Backend**: The existing `pass_backend.py` is still valid and will be used as the backend for the new GUI client.
+---
+
+## 🚀 UI Redesign Plan
+
+**New Concept**: The UI will be redesigned from a two-panel tree view into a single-view, search-oriented application.
+
+**Key Features**:
+1.  **Layout**: A search bar at the top, with a list of results below.
+2.  **Search**: The list will filter in real-time as the user types in the search bar.
+3.  **Details View**: Selecting a result will switch to a form-like view displaying the secret's details.
+4.  **Form Fields**: Each detail (secret, metadata) will be in a read-only input field with "show/hide" and "copy to clipboard" buttons.
 
 ---
 
 ## ✅ Done
 
-1.  **Project Setup**: Virtual environment and initial files created.
-2.  **Backend (`pass_backend.py`)**: `list` and `show` commands implemented and tested with mock data.
-3.  **Prototyping**: A TUI client was prototyped, which helped identify the need for a full GUI.
-
----
-
-## ✅ Done
-
-11. **Backend (`pass_backend.py`) - Fully Complete & Verified**:
-    *   Fixed the `list` command to handle non-existent stores.
-    *   Converted all commands (`list`, `show`, `create`, `edit`, `delete`) to use the real `pass` utility.
-    *   Verified all testable commands via the terminal with a full create-show-delete cycle.
+14. **UI - View Switching Architecture**:
+    *   Implemented a `QStackedWidget` to manage views.
+    *   On `Enter`, the client now correctly fetches secret data from the backend and switches to a placeholder details view.
 
 ---
 
 ## ➡️ Next Step
 
-*   **Resume UI (`pass_client.py`) - Implement `show`**:
-    *   Connect the tree widget's selection event to the backend.
-    *   When a user selects a secret, the client will call the real `pass_backend.py show`.
-    *   The returned secret details will be displayed in the text area on the right.
+*   **UI (`pass_client.py`) - Step 4: Build Details Form**:
+    *   Create a dynamic form widget for the details view.
+    *   When data is received, this form will generate rows for each piece of data (secret, metadata).
+    *   Each row will contain a read-only `QLineEdit`, a show/hide (eyeball) button, and a copy-to-clipboard button.
+    *   The main secret field will be masked by default.
 
-2.  **Client - Layout & Data**:
-    *   Create the main layout (e.g., a tree view on the left for secrets, a text area on the right for content).
-    *   Call the `pass_backend.py list` command on startup and populate the tree view.
+---
 
-3.  **Client - Interactivity**:
-    *   Implement logic to call `pass_backend.py show` when a secret is selected in the tree.
-    *   Display the secret's content in the text area.
+## 🚀 Future UI Steps
 
-4.  **Backend & Client - Write Operations**:
-    *   Implement `create`, `edit`, `delete` in the backend.
-    *   Add corresponding UI elements (buttons, forms) and logic to the GUI client.
+1.  **Data & Search**: Load all secrets into a flat list and implement the real-time search functionality.
+2.  **Views Switching**: Implement a `QStackedWidget` to switch between the search/list view and the details view.
+3.  **Details Form**: Build the dynamic details form with non-editable fields, show/hide buttons, and copy buttons.
+4.  **Integration**: Connect all backend commands (`show`, `create`, `edit`, `delete`) to the UI elements.
