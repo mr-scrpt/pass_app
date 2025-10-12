@@ -4,7 +4,7 @@ import subprocess
 import json
 
 # PySide6 imports must come BEFORE qt_material
-from PySide6.QtCore import Qt, QEvent, QSize
+from PySide6.QtCore import Qt, QEvent, QSize, QTimer
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QFormLayout,
+    QScrollArea,
 )
 from qt_material import apply_stylesheet
+import qtawesome as qta
 
 # --- Catppuccin Mocha Colors for qt-material ---
 extra = {
@@ -105,72 +107,198 @@ class SecretListItem(QWidget):
 class SecretDetailWidget(QWidget):
     def __init__(self, back_callback):
         super().__init__()
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.field_rows = []  # List of (line_edit, toggle_button, value) tuples
+        self.current_field_index = 0
+        
         self.main_layout = QVBoxLayout(self)
-        self.back_button = QPushButton("Back")
+        self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Header with back button, title and status
+        header_widget = QWidget()
+        header_widget.setStyleSheet(f"background-color: {extra['secondaryColor']}; padding: 12px;")
+        header_layout = QHBoxLayout(header_widget)
+        
+        self.back_button = QPushButton()
+        self.back_button.setIcon(qta.icon('fa5s.arrow-left', color=extra['primaryColor']))
         self.back_button.setToolTip("Back to list (Esc)")
+        self.back_button.setFixedSize(40, 40)
         self.back_button.clicked.connect(back_callback)
-        self.main_layout.addWidget(self.back_button, alignment=Qt.AlignLeft)
-
+        header_layout.addWidget(self.back_button)
+        
         self.title_label = QLabel("")
-        self.title_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16pt; font-weight: bold; padding: 10px 0;")
+        self.title_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16pt; font-weight: bold;")
         self.title_label.setAlignment(Qt.AlignCenter)
-        self.main_layout.addWidget(self.title_label)
-
-        self.form_widget = QWidget()
-        self.form_layout = QFormLayout(self.form_widget)
-        self.form_layout.setRowWrapPolicy(QFormLayout.WrapAllRows)
-        self.main_layout.addWidget(self.form_widget)
-        self.main_layout.addStretch()
+        header_layout.addWidget(self.title_label, stretch=1)
+        
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #a6e3a1; font-size: 13px;")
+        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_label.setFixedWidth(100)
+        header_layout.addWidget(self.status_label)
+        
+        self.main_layout.addWidget(header_widget)
+        
+        # Scrollable form area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        
+        self.form_container = QWidget()
+        self.form_layout = QFormLayout(self.form_container)
+        self.form_layout.setSpacing(20)
+        self.form_layout.setContentsMargins(20, 20, 20, 20)
+        self.form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        scroll_area.setWidget(self.form_container)
+        self.main_layout.addWidget(scroll_area)
 
     def populate_data(self, secret_details, secret_name):
         self.title_label.setText(secret_name)
+        
+        # Clear existing fields
         while self.form_layout.count():
             child = self.form_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        
+        self.field_rows = []
+        
         if not secret_details:
             self.form_layout.addRow(QLabel("Could not load secret details."))
             return
+        
+        # Add secret field first
         secret_value = secret_details.pop("secret", "")
-        self._add_form_row("Secret", secret_value, is_password=True)
+        if secret_value:
+            self._add_form_row("Secret", secret_value, is_password=True)
+        
+        # Add other fields
         for key, value in sorted(secret_details.items()):
             self._add_form_row(key, value)
+        
+        # Focus first field
+        if self.field_rows:
+            self._focus_field(0)
 
     def _add_form_row(self, key, value, is_password=False):
+        # Label
         label = QLabel(f"{key}:")
-        row_layout = QHBoxLayout()
+        label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 14px; font-weight: bold;")
+        
+        # Value row with controls
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(8)
+        
         line_edit = QLineEdit(value)
         line_edit.setReadOnly(True)
+        line_edit.setStyleSheet("""
+            QLineEdit {
+                font-size: 14px;
+                padding: 8px;
+                border: 2px solid transparent;
+            }
+            QLineEdit:focus {
+                border: 2px solid #89b4fa;
+                background-color: rgba(137, 180, 250, 0.1);
+            }
+        """)
         if is_password:
             line_edit.setEchoMode(QLineEdit.Password)
-        row_layout.addWidget(line_edit)
-        toggle_button = QPushButton("Show")
-        toggle_button.setToolTip("Toggle Visibility")
+        
+        # Install event filter on line_edit to capture key events
+        line_edit.installEventFilter(self)
+        line_edit.setFocusPolicy(Qt.StrongFocus)
+        row_layout.addWidget(line_edit, stretch=1)
+        
+        # Toggle button with icon only
+        toggle_button = QPushButton()
+        if is_password:
+            toggle_button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
+        else:
+            toggle_button.setIcon(qta.icon('fa5s.eye-slash', color=extra['primaryTextColor']))
+        toggle_button.setToolTip("Toggle Visibility (Ctrl+S)")
+        toggle_button.setFixedSize(36, 36)
         toggle_button.clicked.connect(lambda: self._toggle_visibility(line_edit, toggle_button))
         row_layout.addWidget(toggle_button)
-        copy_button = QPushButton("Copy")
-        copy_button.setToolTip("Copy to Clipboard")
-        copy_button.clicked.connect(lambda: self._copy_to_clipboard(value))
+        
+        # Copy button with icon only
+        copy_button = QPushButton()
+        copy_button.setIcon(qta.icon('fa5s.copy', color=extra['primaryTextColor']))
+        copy_button.setToolTip("Copy to Clipboard (Ctrl+C)")
+        copy_button.setFixedSize(36, 36)
+        copy_button.clicked.connect(lambda v=value: self._copy_to_clipboard(v))
         row_layout.addWidget(copy_button)
-        self.form_layout.addRow(label, row_layout)
-
-    def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key_Escape:
-            self.back_button.click()
-        else:
-            super().keyPressEvent(event)
+        
+        self.form_layout.addRow(label, row_widget)
+        
+        # Store reference for keyboard navigation
+        self.field_rows.append((line_edit, toggle_button, value))
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
             line_edit.setEchoMode(QLineEdit.Normal)
-            button.setText("Hide")
+            button.setIcon(qta.icon('fa5s.eye-slash', color=extra['primaryTextColor']))
         else:
             line_edit.setEchoMode(QLineEdit.Password)
-            button.setText("Show")
+            button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
 
     def _copy_to_clipboard(self, text):
         QApplication.clipboard().setText(text)
+        self.status_label.setText("✓ Copied!")
+        QTimer.singleShot(2000, lambda: self.status_label.setText(""))
+
+    def _focus_field(self, index):
+        if 0 <= index < len(self.field_rows):
+            self.current_field_index = index
+            line_edit, _, _ = self.field_rows[index]
+            line_edit.setFocus()
+            line_edit.selectAll()
+
+    def eventFilter(self, obj, event):
+        """Intercept key events from line edits"""
+        if event.type() == QEvent.KeyPress:
+            key = event.key()
+            modifiers = event.modifiers()
+            
+            # Check if event is from one of our line edits
+            is_our_field = any(obj == line_edit for line_edit, _, _ in self.field_rows)
+            if not is_our_field:
+                return super().eventFilter(obj, event)
+            
+            # Update current field index
+            for i, (line_edit, _, _) in enumerate(self.field_rows):
+                if obj == line_edit:
+                    self.current_field_index = i
+                    break
+            
+            # Handle navigation keys
+            if key == Qt.Key_Escape:
+                self.back_button.click()
+                return True
+            elif key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
+                next_index = (self.current_field_index + 1) % len(self.field_rows)
+                self._focus_field(next_index)
+                return True
+            elif key == Qt.Key_Up or (key == Qt.Key_Tab and modifiers == Qt.ShiftModifier):
+                prev_index = (self.current_field_index - 1) % len(self.field_rows)
+                self._focus_field(prev_index)
+                return True
+            elif modifiers == Qt.ControlModifier:
+                if key == Qt.Key_C:
+                    # Copy current field value
+                    _, _, value = self.field_rows[self.current_field_index]
+                    self._copy_to_clipboard(value)
+                    return True
+                elif key == Qt.Key_S:
+                    # Toggle visibility of current field
+                    line_edit, toggle_button, _ = self.field_rows[self.current_field_index]
+                    self._toggle_visibility(line_edit, toggle_button)
+                    return True
+        
+        return super().eventFilter(obj, event)
 
 # --- Main Window ---
 class MainWindow(QMainWindow):
@@ -300,7 +428,8 @@ class MainWindow(QMainWindow):
 
     def _show_details_view(self):
         self.stack.setCurrentIndex(1)
-        self.details_widget.setFocus()
+        if self.details_widget.field_rows:
+            self.details_widget._focus_field(0)
 
 def main():
     app = QApplication(sys.argv)
