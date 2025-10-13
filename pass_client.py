@@ -139,8 +139,7 @@ class SecretEditWidget(QWidget):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
-        self.field_rows = []  # List of (key_edit, value_edit, delete_button, row_container) tuples
-        self.current_field_index = 0
+        self.field_rows = []  # List of (key_edit, value_edit, delete_button, row_widget)
         self.namespace = ""
         self.resource = ""
         
@@ -194,9 +193,10 @@ class SecretEditWidget(QWidget):
         scroll_area.setFrameShape(QScrollArea.NoFrame)
         
         self.form_container = QWidget()
-        self.form_layout = QVBoxLayout(self.form_container)
-        self.form_layout.setSpacing(15)
+        self.form_layout = QFormLayout(self.form_container)
+        self.form_layout.setSpacing(20)
         self.form_layout.setContentsMargins(20, 20, 20, 20)
+        self.form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         
         scroll_area.setWidget(self.form_container)
         self.main_layout.addWidget(scroll_area)
@@ -208,9 +208,7 @@ class SecretEditWidget(QWidget):
         
         # Clear existing fields
         while self.form_layout.count():
-            child = self.form_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            self.form_layout.removeRow(0)
         
         self.field_rows = []
         
@@ -227,18 +225,6 @@ class SecretEditWidget(QWidget):
             self._add_field_row(key, value)
 
     def _add_field_row(self, key="", value="", is_secret=False):
-        row_container = QWidget()
-        row_container.setStyleSheet("""
-            QWidget {
-                background-color: rgba(255, 255, 255, 0.03);
-                border-left: 3px solid transparent;
-                padding: 8px;
-                border-radius: 4px;
-            }
-        """)
-        container_layout = QHBoxLayout(row_container)
-        container_layout.setSpacing(12)
-        
         # Key input
         key_edit = QLineEdit(key)
         key_edit.setPlaceholderText("Field name...")
@@ -258,9 +244,13 @@ class SecretEditWidget(QWidget):
         """)
         key_edit.setFixedWidth(200)
         key_edit.installEventFilter(self)
-        container_layout.addWidget(key_edit)
         
-        # Value input
+        # --- Value widget (container for line edit and delete button) ---
+        value_widget = QWidget()
+        value_layout = QHBoxLayout(value_widget)
+        value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.setSpacing(8)
+
         value_edit = QLineEdit(value)
         value_edit.setPlaceholderText("Value...")
         value_edit.setStyleSheet("""
@@ -275,21 +265,23 @@ class SecretEditWidget(QWidget):
             }
         """)
         value_edit.installEventFilter(self)
-        container_layout.addWidget(value_edit, stretch=1)
+        value_layout.addWidget(value_edit, stretch=1)
         
-        # Delete button (not for secret field)
+        delete_btn = None
         if not is_secret:
             delete_btn = QPushButton()
             delete_btn.setIcon(qta.icon('fa5s.trash', color='#f38ba8'))
             delete_btn.setToolTip("Delete field")
             delete_btn.setFixedSize(36, 36)
-            delete_btn.clicked.connect(lambda: self._delete_field(row_container))
-            container_layout.addWidget(delete_btn)
-        else:
-            delete_btn = None
+            # Use a lambda to pass the row's widget to the delete function
+            delete_btn.clicked.connect(lambda: self._delete_field(key_edit))
+            value_layout.addWidget(delete_btn)
         
-        self.form_layout.addWidget(row_container)
-        self.field_rows.append((key_edit, value_edit, delete_btn, row_container))
+        # Add the row to the form layout
+        self.form_layout.addRow(key_edit, value_widget)
+        
+        # Store references to the widgets for this row
+        self.field_rows.append((key_edit, value_edit, delete_btn, key_edit))
 
     def _add_new_field(self):
         self._add_field_row("", "")
@@ -297,12 +289,12 @@ class SecretEditWidget(QWidget):
             self.field_rows[-1][0].setFocus()
         self._show_status("Field added")
 
-    def _delete_field(self, row_container):
+    def _delete_field(self, key_edit_to_delete):
         # Find and remove the field
-        for i, (_, _, _, container) in enumerate(self.field_rows):
-            if container == row_container:
+        for i, (key_edit, _, _, _) in enumerate(self.field_rows):
+            if key_edit == key_edit_to_delete:
+                self.form_layout.removeRow(i)
                 self.field_rows.pop(i)
-                container.deleteLater()
                 self._show_status("Field deleted")
                 break
 
@@ -346,7 +338,8 @@ class SecretEditWidget(QWidget):
 class SecretDetailWidget(QWidget):
     def __init__(self, back_callback):
         super().__init__()
-        self.field_rows = []  # List of (line_edit, toggle_button, value) tuples
+        # List of (line_edit, toggle_button, edit_button, value, container)
+        self.field_rows = []
         self.current_field_index = 0
         
         self.main_layout = QVBoxLayout(self)
@@ -397,9 +390,7 @@ class SecretDetailWidget(QWidget):
         
         # Clear existing fields
         while self.form_layout.count():
-            child = self.form_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            self.form_layout.removeRow(0)
         
         self.field_rows = []
         
@@ -461,6 +452,9 @@ class SecretDetailWidget(QWidget):
                 border: 2px solid #89b4fa;
                 background-color: rgba(255, 255, 255, 0.05);
             }
+            QLineEdit:!read-only {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
         """)
         if is_password:
             line_edit.setEchoMode(QLineEdit.Password)
@@ -478,17 +472,25 @@ class SecretDetailWidget(QWidget):
             toggle_button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
         else:
             toggle_button.setIcon(qta.icon('fa5s.eye-slash', color=extra['primaryTextColor']))
-        toggle_button.setToolTip("Toggle Visibility (Ctrl+S)")
+        toggle_button.setToolTip("Toggle Visibility (Ctrl+T)")
         toggle_button.setFixedSize(36, 36)
         toggle_button.clicked.connect(lambda: self._toggle_visibility(line_edit, toggle_button))
         value_layout.addWidget(toggle_button)
         
+        # Edit button
+        edit_button = QPushButton()
+        edit_button.setIcon(qta.icon('fa5s.pencil-alt', color=extra['primaryTextColor']))
+        edit_button.setToolTip("Edit field (Ctrl+E)")
+        edit_button.setFixedSize(36, 36)
+        edit_button.clicked.connect(lambda: self._enable_editing(line_edit))
+        value_layout.addWidget(edit_button)
+
         # Copy button with icon only
         copy_button = QPushButton()
         copy_button.setIcon(qta.icon('fa5s.copy', color=extra['primaryTextColor']))
-        copy_button.setToolTip("Copy to Clipboard (Ctrl+C)")
+        copy_button.setToolTip("Copy to Clipboard (Enter or Ctrl+C)")
         copy_button.setFixedSize(36, 36)
-        copy_button.clicked.connect(lambda v=value: self._copy_to_clipboard(v))
+        copy_button.clicked.connect(lambda: self._copy_to_clipboard(line_edit.text()))
         value_layout.addWidget(copy_button)
         
         container_layout.addWidget(value_widget, stretch=1)
@@ -496,7 +498,21 @@ class SecretDetailWidget(QWidget):
         self.form_layout.addRow(row_container)
         
         # Store reference for keyboard navigation
-        self.field_rows.append((line_edit, toggle_button, value, row_container))
+        self.field_rows.append((line_edit, toggle_button, edit_button, value, row_container))
+
+    def _enable_editing(self, line_edit):
+        line_edit.setReadOnly(False)
+        line_edit.setFocus()
+        self._show_status("Editing enabled")
+
+    def _cancel_editing(self, line_edit):
+        # Find original value
+        for le, _, _, original_value, _ in self.field_rows:
+            if le == line_edit:
+                line_edit.setText(original_value)
+                break
+        line_edit.setReadOnly(True)
+        self._show_status("Edit cancelled")
 
     def _on_field_focus_in(self, event, container):
         """Highlight the row when field gets focus"""
@@ -518,7 +534,18 @@ class SecretDetailWidget(QWidget):
                 padding-left: 8px;
             }
         """)
-        QLineEdit.focusOutEvent(container.findChild(QLineEdit), event)
+        # Make the field read-only again when it loses focus
+        line_edit = container.findChild(QLineEdit)
+        if line_edit and not line_edit.isReadOnly():
+            # Don't make it read-only if focus is moving to a button in the same row
+            focus_dest = QApplication.focusWidget()
+            if focus_dest and focus_dest.parent() == line_edit.parent():
+                pass # Focus is still within the value_widget
+            else:
+                line_edit.setReadOnly(True)
+                self._show_status("") # Clear status
+        
+        QLineEdit.focusOutEvent(line_edit, event)
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
@@ -536,9 +563,13 @@ class SecretDetailWidget(QWidget):
     def _focus_field(self, index):
         if 0 <= index < len(self.field_rows):
             self.current_field_index = index
-            line_edit, _, _, _ = self.field_rows[index]
+            line_edit, _, _, _, _ = self.field_rows[index]
             line_edit.setFocus()
             line_edit.selectAll()
+
+    def _show_status(self, message):
+        self.status_label.setText(message)
+        QTimer.singleShot(2000, lambda: self.status_label.setText(""))
 
     def eventFilter(self, obj, event):
         """Intercept key events from line edits"""
@@ -546,20 +577,35 @@ class SecretDetailWidget(QWidget):
             key = event.key()
             modifiers = event.modifiers()
             
+            # --- Global Escape Key Handler ---
+            if key == Qt.Key_Escape:
+                focused_widget = QApplication.focusWidget()
+                if isinstance(focused_widget, QLineEdit) and not focused_widget.isReadOnly():
+                    # If a field is being edited, cancel the edit
+                    self._cancel_editing(focused_widget)
+                    return True
+                else:
+                    # Otherwise, go back
+                    self.back_button.click()
+                    return True
+
             # Check if event is from one of our line edits
-            is_our_field = any(obj == line_edit for line_edit, _, _, _ in self.field_rows)
+            is_our_field = any(obj == line_edit for line_edit, _, _, _, _ in self.field_rows)
             if not is_our_field:
                 return super().eventFilter(obj, event)
             
-            # Update current field index
-            for i, (line_edit, _, _, _) in enumerate(self.field_rows):
+            # --- Field-specific key handlers ---
+            current_le = obj
+            
+            # Find current field index
+            for i, (line_edit, _, _, _, _) in enumerate(self.field_rows):
                 if obj == line_edit:
                     self.current_field_index = i
                     break
             
-            # Handle navigation keys
-            if key == Qt.Key_Escape:
-                self.back_button.click()
+            # Handle navigation and action keys
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                self._copy_to_clipboard(current_le.text())
                 return True
             elif key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
                 next_index = (self.current_field_index + 1) % len(self.field_rows)
@@ -571,14 +617,14 @@ class SecretDetailWidget(QWidget):
                 return True
             elif modifiers == Qt.ControlModifier:
                 if key == Qt.Key_C:
-                    # Copy current field value
-                    _, _, value, _ = self.field_rows[self.current_field_index]
-                    self._copy_to_clipboard(value)
+                    self._copy_to_clipboard(current_le.text())
                     return True
-                elif key == Qt.Key_S:
-                    # Toggle visibility of current field
-                    line_edit, toggle_button, _, _ = self.field_rows[self.current_field_index]
-                    self._toggle_visibility(line_edit, toggle_button)
+                elif key == Qt.Key_E:
+                    self._enable_editing(current_le)
+                    return True
+                elif key == Qt.Key_T:
+                    _, toggle_button, _, _, _ = self.field_rows[self.current_field_index]
+                    self._toggle_visibility(current_le, toggle_button)
                     return True
         
         return super().eventFilter(obj, event)
