@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QKeyEvent, QColor, QPainter, QPen
+from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPoint
+from PySide6.QtGui import QKeyEvent, QColor
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -17,49 +17,19 @@ import qtawesome as qta
 
 from ui_theme import extra
 
-class Toast(QWidget):
-    def __init__(self, parent, message):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-
-        # Main layout
+class HotkeyHelpWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet(f"background-color: {extra['primaryColor']}; padding: 8px;")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(15, 10, 15, 10)
-        layout.setSpacing(10)
-
-        # Icon
-        icon_label = QLabel()
-        icon_pixmap = qta.icon('fa5s.check-circle', color='#1e1e2e').pixmap(QSize(18, 18))
-        icon_label.setPixmap(icon_pixmap)
-        layout.addWidget(icon_label)
-
-        # Message
-        self.label = QLabel(message, self)
-        self.label.setStyleSheet("color: #1e1e2e; background-color: transparent; border: none;")
+        layout.setContentsMargins(15, 5, 15, 5)
+        self.label = QLabel("")
+        self.label.setStyleSheet(f"color: {extra['secondaryColor']}; font-size: 12px; font-weight: bold;")
+        self.label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label)
 
-        # Set background on the main widget itself
-        self.setStyleSheet("background-color: #a6e3a1; border-radius: 6px;")
-
-        self.show()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        # Ensure size is calculated before moving
-        self.adjustSize()
-        parent_rect = self.parent().geometry()
-        # Position at bottom-right with a margin
-        self.move(
-            parent_rect.x() + parent_rect.width() - self.width() - 20,
-            parent_rect.y() + parent_rect.height() - self.height() - 20
-        )
-        QTimer.singleShot(2000, self.close)
-
-    @staticmethod
-    def show_toast(parent, message):
-        Toast(parent, message)
+    def setText(self, text):
+        self.label.setText(text)
 
 class ConfirmationDialog(QDialog):
     def __init__(self, parent=None):
@@ -75,7 +45,6 @@ class ConfirmationDialog(QDialog):
         self.message_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.message_label)
 
-        # Button layout
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
         
@@ -144,9 +113,8 @@ class SecretListItem(QWidget):
         return QSize(self.width(), 44)
 
 class SecretDetailWidget(QWidget):
-    def __init__(self, main_window, back_callback, save_callback):
+    def __init__(self, back_callback, save_callback):
         super().__init__()
-        self.main_window = main_window
         self.back_callback = back_callback
         self.save_callback = save_callback
         self.field_rows = []
@@ -179,7 +147,7 @@ class SecretDetailWidget(QWidget):
         self.save_button.setIcon(qta.icon('fa5s.save', color='#a6e3a1'))
         self.save_button.setToolTip("Save changes (Ctrl+S)")
         self.save_button.setFixedSize(40, 40)
-        self.save_button.setEnabled(False) # Initially disabled
+        self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._prompt_to_save)
         header_layout.addWidget(self.save_button)
         
@@ -198,23 +166,15 @@ class SecretDetailWidget(QWidget):
         scroll_area.setWidget(self.form_container)
         self.main_layout.addWidget(scroll_area)
 
-        help_footer = QWidget()
-        help_footer.setStyleSheet(f"background-color: {extra['secondaryColor']}; border-top: 1px solid #45475a; padding: 4px;")
-        help_layout = QHBoxLayout(help_footer)
-        help_layout.setContentsMargins(15, 5, 15, 5)
-
-        hotkey_text = (
-            "<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; "
-            "<b>Copy:</b> Enter, Ctrl+C &nbsp;&nbsp; "
-            "<b>Edit:</b> Ctrl+E &nbsp;&nbsp; "
-            "<b>Toggle View:</b> Ctrl+T &nbsp;&nbsp; "
-            "<b>Save:</b> Ctrl+S &nbsp;&nbsp; "
-            "<b>Cancel/Back:</b> Esc"
-        )
-        help_label = QLabel(hotkey_text)
-        help_label.setStyleSheet(f"color: {extra['secondaryTextColor']}; font-size: 12px;")
-        help_layout.addWidget(help_label, alignment=Qt.AlignCenter)
-        self.main_layout.addWidget(help_footer)
+        # --- Status Bar ---
+        status_bar = QWidget()
+        status_bar.setStyleSheet(f"background-color: {extra['secondaryColor']}; border-top: 1px solid #45475a; padding: 4px;")
+        status_layout = QHBoxLayout(status_bar)
+        status_layout.setContentsMargins(15, 2, 15, 2)
+        self.status_label = QLabel("")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        status_layout.addWidget(self.status_label)
+        self.main_layout.addWidget(status_bar)
 
     def populate_data(self, secret_details, secret_name, namespace, resource):
         self.title_label.setText(secret_name)
@@ -334,17 +294,17 @@ class SecretDetailWidget(QWidget):
         
         result = self.save_callback(self.namespace, self.resource, final_content)
         if result and result.get("status") == "success":
-            self._show_status("✓ Saved!")
+            self._show_status("Saved!", "success")
             for row in self.field_rows:
                 row['orig_val'] = row['le'].text()
             self._set_dirty(False)
         else:
-            self._show_status("Save failed!")
+            self._show_status("Save failed!", "error")
 
     def _enable_editing(self, line_edit):
         line_edit.setReadOnly(False)
         line_edit.setFocus()
-        self._show_status("Editing enabled")
+        self._show_status("Editing enabled", "info")
 
     def _cancel_editing(self, line_edit):
         for row in self.field_rows:
@@ -352,7 +312,7 @@ class SecretDetailWidget(QWidget):
                 line_edit.setText(row['orig_val'])
                 break
         line_edit.setReadOnly(True)
-        self._show_status("Edit cancelled")
+        self._show_status("Edit cancelled", "info")
         self._check_for_changes()
 
     def _on_field_focus_in(self, event, container):
@@ -380,7 +340,7 @@ class SecretDetailWidget(QWidget):
             button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
 
     def _copy_to_clipboard(self, text):
-        self._show_status("✓ Copied!")
+        self._show_status("Copied!", "success")
         QApplication.clipboard().setText(text)
 
     def _focus_field(self, index):
@@ -390,9 +350,22 @@ class SecretDetailWidget(QWidget):
             line_edit.setFocus()
             line_edit.selectAll()
 
-    def _show_status(self, message):
-        if message:
-            Toast.show_toast(self.main_window, message)
+    def _show_status(self, message, toast_type="success"):
+        if not message:
+            self.status_label.setText("")
+            return
+
+        color = extra['primaryTextColor'] # Default color
+        if toast_type == "success":
+            color = "#a6e3a1" # Green
+        elif toast_type == "error":
+            color = "#f38ba8" # Red
+        elif toast_type == "info":
+            color = "#89b4fa" # Blue
+
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")
+        QTimer.singleShot(3000, lambda: self.status_label.setText(""))
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress:

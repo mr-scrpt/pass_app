@@ -1,37 +1,23 @@
 import sys
 import os
-import subprocess
-import json
 
-# PySide6 imports must come BEFORE qt-material
-from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QKeyEvent, QColor, QPainter, QPen
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
     QMainWindow,
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QStackedWidget,
-    QPushButton,
-    QLabel,
-    QFormLayout,
-    QScrollArea,
 )
 from qt_material import apply_stylesheet
-import qtawesome as qta
-
-from ui_theme import extra, CATPPUCCIN_COLORS
 
 from backend_utils import get_list_from_backend, get_secret_from_backend, save_secret_to_backend
+from ui_theme import CATPPUCCIN_COLORS, extra
+from ui_widgets import ConfirmationDialog, SecretListItem, SecretDetailWidget, HotkeyHelpWidget
 
-# --- Custom Widgets ---
-
-from ui_widgets import Toast, ConfirmationDialog, SecretListItem, SecretDetailWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -40,34 +26,48 @@ class MainWindow(QMainWindow):
         self.namespace_colors = {}
         self.current_selected_item = None
         self.setWindowTitle("Pass Suite")
-        self.resize(600, 450) # Increased height for the help footer
-        self.stack = QStackedWidget()
-        self.setCentralWidget(self.stack)
+        self.resize(600, 450)
 
+        # --- Main Layout ---
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(main_widget)
+
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+
+        # --- Shared Hotkey Help Widget ---
+        self.help_widget = HotkeyHelpWidget()
+        main_layout.addWidget(self.help_widget)
+
+        # --- Search View ---
         search_view_widget = QWidget()
         search_layout = QVBoxLayout(search_view_widget)
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search secrets...")
         search_layout.addWidget(self.search_bar)
         self.results_list = QListWidget()
-        
         self.results_list.setStyleSheet("QListWidget::item { border: none; padding: 0px; } QListWidget::item:selected { background-color: rgba(137, 180, 250, 0.2); border-left: 3px solid #89b4fa; } QListWidget::item:hover { background-color: rgba(137, 180, 250, 0.1); }")
-        
         search_layout.addWidget(self.results_list)
         self.stack.addWidget(search_view_widget)
 
+        # --- Details View ---
         self.details_widget = SecretDetailWidget(
-            main_window=self,
             back_callback=self._show_search_view,
             save_callback=self._save_secret
         )
         self.stack.addWidget(self.details_widget)
-        
+
+        # --- Initial Load & Connections ---
         self.load_data_and_populate()
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
         self.results_list.currentItemChanged.connect(self._on_selection_changed)
         self.search_bar.installEventFilter(self)
+        
+        self._show_search_view() # Set initial view and hotkeys
 
     def eventFilter(self, source, event):
         if source == self.search_bar and event.type() == QEvent.KeyPress:
@@ -175,13 +175,15 @@ class MainWindow(QMainWindow):
             dialog = ConfirmationDialog(self)
             dialog.message_label.setText("You have unsaved changes. Discard them?")
             if dialog.exec() != QDialog.Accepted:
-                return # User cancelled, stay on the details page
+                return
 
+        self.help_widget.setText("<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>View Secret:</b> Enter")
         self.stack.setCurrentIndex(0)
         self.search_bar.setFocus()
         self.search_bar.selectAll()
 
     def _show_details_view(self):
+        self.help_widget.setText("<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Copy:</b> Enter, Ctrl+C &nbsp;&nbsp; <b>Edit:</b> Ctrl+E &nbsp;&nbsp; <b>Save:</b> Ctrl+S &nbsp;&nbsp; <b>Back:</b> Esc")
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)
