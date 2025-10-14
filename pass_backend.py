@@ -69,9 +69,18 @@ def show_secret():
         result = subprocess.run(["pass", "show", secret_path], capture_output=True, text=True, check=True)
         content = result.stdout.strip()
         lines = content.split('\n')
-        secret = lines[0]
-        metadata = {k.strip(): v.strip() for line in lines[1:] if ':' in line for k, v in [line.split(':', 1)]}
-        print(json.dumps({"secret": secret, **metadata}, indent=2))
+        
+        # The first line is always the secret
+        secret_data = [["secret", lines[0]]]
+        
+        # Subsequent lines are key-value pairs
+        for line in lines[1:]:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                secret_data.append([key.strip(), value.strip()])
+            # You could add an else here to handle non-kv lines if needed
+
+        print(json.dumps(secret_data, indent=2))
     except Exception as e:
         handle_error(e)
 

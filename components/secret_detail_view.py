@@ -16,6 +16,7 @@ import qtawesome as qta
 
 from ui_theme import extra
 from components.confirmation_dialog import ConfirmationDialog
+from backend_utils import get_secret_from_backend
 
 class SecretDetailWidget(QWidget):
     def __init__(self, back_callback, save_callback):
@@ -23,6 +24,7 @@ class SecretDetailWidget(QWidget):
         self.back_callback = back_callback
         self.save_callback = save_callback
         self.field_rows = []
+        self.new_rows = []
         self.current_field_index = 0
         self.is_dirty = False
         self.namespace = ""
@@ -71,7 +73,6 @@ class SecretDetailWidget(QWidget):
         scroll_area.setWidget(self.form_container)
         self.main_layout.addWidget(scroll_area)
 
-        # --- Status Bar ---
         status_layout = QHBoxLayout()
         status_layout.setContentsMargins(15, 2, 15, 2)
         self.status_label = QLabel("")
@@ -81,27 +82,33 @@ class SecretDetailWidget(QWidget):
         status_layout.addStretch(1)
         self.main_layout.addLayout(status_layout)
 
-    def populate_data(self, secret_details, secret_name, namespace, resource):
+    def populate_data(self, secret_data, secret_name, namespace, resource):
         self.title_label.setText(secret_name)
         self.namespace = namespace
         self.resource = resource
         self._set_dirty(False)
+
+        for row in self.new_rows:
+            row['widget'].deleteLater()
+        self.new_rows = []
 
         while self.form_layout.count():
             self.form_layout.removeRow(0)
         
         self.field_rows = []
         
-        if not secret_details:
+        if not secret_data:
             self.form_layout.addRow(QLabel("Could not load secret details."))
             return
         
-        secret_value = secret_details.pop("secret", "")
-        self._add_form_row("secret", secret_value, is_password=True)
+        # Now expects a list of [key, value] pairs
+        for item in secret_data:
+            key, value = item
+            is_password = (key == "secret")
+            self._add_form_row(key, value, is_password=is_password)
         
-        for key, value in sorted(secret_details.items()):
-            self._add_form_row(key, value, is_password=False)
-        
+        self._add_add_new_field_button()
+
         if self.field_rows:
             self._focus_field(0)
 
@@ -163,36 +170,117 @@ class SecretDetailWidget(QWidget):
         self.form_layout.addRow(row_container)
         self.field_rows.append({'le': line_edit, 'orig_val': value, 'container': row_container, 'toggle_btn': toggle_button, 'label': label})
 
+    def _add_add_new_field_button(self):
+        self.add_field_button = QPushButton(" Add New Field")
+        self.add_field_button.setIcon(qta.icon('fa5s.plus-circle', color='#89b4fa'))
+        self.add_field_button.setStyleSheet("QPushButton { border: none; padding: 10px; } QPushButton:hover { background-color: rgba(137, 180, 250, 0.1); }")
+        self.add_field_button.clicked.connect(self.add_new_field_row)
+        self.form_layout.addRow(self.add_field_button)
+
+    def add_new_field_row(self):
+        key_edit = QLineEdit()
+        key_edit.setPlaceholderText("Field Name")
+        key_edit.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        key_edit.textChanged.connect(self._check_for_changes)
+
+        value_edit = QLineEdit()
+        value_edit.setPlaceholderText("Field Value")
+        value_edit.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        value_edit.textChanged.connect(self._check_for_changes)
+
+        remove_button = QPushButton()
+        remove_button.setIcon(qta.icon('fa5s.trash-alt', color='#f38ba8'))
+        remove_button.setToolTip("Remove this field")
+        remove_button.setFixedSize(36, 36)
+
+        new_row_widget = QWidget()
+        layout = QHBoxLayout(new_row_widget)
+        layout.setContentsMargins(0,0,0,0)
+        layout.addWidget(key_edit)
+        layout.addWidget(value_edit)
+        layout.addWidget(remove_button)
+
+        row_data = {'widget': new_row_widget, 'key_le': key_edit, 'val_le': value_edit}
+        remove_button.clicked.connect(lambda: self._remove_new_field_row(row_data))
+        
+        key_edit.installEventFilter(self)
+        value_edit.installEventFilter(self)
+
+        self.form_layout.insertRow(self.form_layout.rowCount() - 1, new_row_widget)
+        self.new_rows.append(row_data)
+        self._check_for_changes()
+        key_edit.setFocus()
+
+    def _remove_new_field_row(self, row_data):
+        if row_data in self.new_rows:
+            self.new_rows.remove(row_data)
+            row_data['widget'].deleteLater()
+            self._check_for_changes()
+
+    def _confirm_and_convert_field(self, row_data):
+        key = row_data['key_le'].text().strip()
+        value = row_data['val_le'].text()
+
+        if not key or not value:
+            self._show_status("Field name and value cannot be empty.", "error")
+            return
+
+        dialog = ConfirmationDialog(self)
+        dialog.message_label.setText(f"Add field '{key}' to the secret?")
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        self._remove_new_field_row(row_data)
+        self.form_layout.removeRow(self.add_field_button)
+        self._add_form_row(key, value)
+        self._add_add_new_field_button()
+        self._set_dirty(True)
+        self._focus_field(len(self.field_rows) - 1)
+
     def _set_dirty(self, dirty):
         self.is_dirty = dirty
         self.save_button.setEnabled(dirty)
 
     def _check_for_changes(self):
-        is_different = False
         for row in self.field_rows:
             if row['le'].text() != row['orig_val']:
-                is_different = True
-                break
-        self._set_dirty(is_different)
+                self._set_dirty(True)
+                return
+
+        if self.new_rows:
+            self._set_dirty(True)
+            return
+
+        self._set_dirty(False)
 
     def _prompt_to_save(self):
         if not self.is_dirty:
             return
         
+        if self.new_rows:
+            self._show_status("You have unconfirmed fields. Press Enter to confirm them first.", "info")
+            return
+
         dialog = ConfirmationDialog(self)
         if dialog.exec() == QDialog.Accepted:
             self._save_changes()
 
     def _save_changes(self):
-        new_data = {}
+        content_lines = []
+        password = ""
+        # Ensure password is first
+        for row in self.field_rows:
+            if row['label'].text() == "secret:":
+                password = row['le'].text()
+                break
+        content_lines.append(password)
+
+        # Add other fields in their visual order
         for row in self.field_rows:
             key = row['label'].text().strip(':')
+            if key == "secret":
+                continue
             value = row['le'].text()
-            new_data[key] = value
-        
-        secret = new_data.pop('secret', '')
-        content_lines = [secret]
-        for key, value in new_data.items():
             content_lines.append(f"{key}: {value}")
         
         final_content = "\n".join(content_lines)
@@ -200,11 +288,10 @@ class SecretDetailWidget(QWidget):
         result = self.save_callback(self.namespace, self.resource, final_content)
         if result and result.get("status") == "success":
             self._show_status("Saved!", "success")
-            for row in self.field_rows:
-                row['orig_val'] = row['le'].text()
-            self._set_dirty(False)
+            new_details = get_secret_from_backend(self.namespace, self.resource)
+            self.populate_data(new_details, self.title_label.text(), self.namespace, self.resource)
         else:
-            self._show_status("Save failed!", "error")
+            self._show_status(f"Save failed: {result.get('message', 'Unknown error')}", "error")
 
     def _enable_editing(self, line_edit):
         line_edit.setReadOnly(False)
@@ -260,13 +347,13 @@ class SecretDetailWidget(QWidget):
             self.status_label.setText("")
             return
 
-        color = extra['primaryTextColor'] # Default color
+        color = extra['primaryTextColor']
         if toast_type == "success":
-            color = "#a6e3a1" # Green
+            color = "#a6e3a1"
         elif toast_type == "error":
-            color = "#f38ba8" # Red
+            color = "#f38ba8"
         elif toast_type == "info":
-            color = "#89b4fa" # Blue
+            color = "#89b4fa"
 
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")
@@ -276,7 +363,14 @@ class SecretDetailWidget(QWidget):
         if event.type() == QEvent.KeyPress:
             key = event.key()
             modifiers = event.modifiers()
-            
+
+            for row_data in self.new_rows:
+                if obj is row_data['key_le'] or obj is row_data['val_le']:
+                    if key in (Qt.Key_Return, Qt.Key_Enter):
+                        self._confirm_and_convert_field(row_data)
+                        return True
+                    return super().eventFilter(obj, event)
+
             if key == Qt.Key_Escape:
                 focused_widget = QApplication.focusWidget()
                 if isinstance(focused_widget, QLineEdit) and not focused_widget.isReadOnly():

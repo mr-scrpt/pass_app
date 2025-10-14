@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
         self.hotkey_manager.register('return', self.handle_search_activate, priority=5)
         self.hotkey_manager.register('enter', self.handle_search_activate, priority=5)
 
+        self.hotkey_manager.register('ctrl+n', self.handle_add_field, priority=8)
+
     def eventFilter(self, source, event):
         if event.type() == QEvent.KeyPress:
             if self.hotkey_manager.handle(event):
@@ -113,6 +115,12 @@ class MainWindow(QMainWindow):
     def handle_search_activate(self, event):
         if self.stack.currentWidget() == self.search_view and self.results_list.currentItem():
             self._on_item_activated(self.results_list.currentItem())
+            return True
+        return False
+
+    def handle_add_field(self, event):
+        if self.stack.currentWidget() == self.details_widget:
+            self.details_widget.add_new_field_row()
             return True
         return False
 
