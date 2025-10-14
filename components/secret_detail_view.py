@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QFormLayout,
     QScrollArea,
-    QDialog
+    QDialog,
+    QStackedWidget,
+    QSizePolicy
 )
 import qtawesome as qta
 
@@ -66,7 +68,7 @@ class SecretDetailWidget(QWidget):
         
         self.form_container = QWidget()
         self.form_layout = QFormLayout(self.form_container)
-        self.form_layout.setSpacing(20)
+        self.form_layout.setSpacing(10)
         self.form_layout.setContentsMargins(20, 20, 20, 20)
         self.form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         
@@ -101,7 +103,6 @@ class SecretDetailWidget(QWidget):
             self.form_layout.addRow(QLabel("Could not load secret details."))
             return
         
-        # Now expects a list of [key, value] pairs
         for item in secret_data:
             key, value = item
             is_password = (key == "secret")
@@ -119,11 +120,18 @@ class SecretDetailWidget(QWidget):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(12)
         
+        label_stack = QStackedWidget()
+        label_stack.setFixedWidth(150)
+        label_stack.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         label = QLabel(f"{key}:")
         label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;")
         label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
-        label.setFixedWidth(150)
-        container_layout.addWidget(label)
+        key_le = QLineEdit(key)
+        key_le.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        key_le.textChanged.connect(self._check_for_changes)
+        label_stack.addWidget(label)
+        label_stack.addWidget(key_le)
+        container_layout.addWidget(label_stack)
         
         value_widget = QWidget()
         value_widget.setStyleSheet("border: none;")
@@ -138,10 +146,11 @@ class SecretDetailWidget(QWidget):
             line_edit.setEchoMode(QLineEdit.Password)
         
         line_edit.installEventFilter(self)
+        key_le.installEventFilter(self)
         line_edit.setFocusPolicy(Qt.StrongFocus)
         line_edit.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
         line_edit.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
-        line_edit.textEdited.connect(self._check_for_changes)
+        line_edit.textChanged.connect(self._check_for_changes)
         value_layout.addWidget(line_edit, stretch=1)
         
         toggle_button = QPushButton()
@@ -168,7 +177,12 @@ class SecretDetailWidget(QWidget):
         
         container_layout.addWidget(value_widget, stretch=1)
         self.form_layout.addRow(row_container)
-        self.field_rows.append({'le': line_edit, 'orig_val': value, 'container': row_container, 'toggle_btn': toggle_button, 'label': label})
+        self.field_rows.append({
+            'le': line_edit, 'orig_val': value, 'container': row_container, 
+            'toggle_btn': toggle_button, 'label': label, 'key_le': key_le, 
+            'label_stack': label_stack, 'orig_key': key, 'value_layout': value_layout,
+            'is_deep_editing': False, 'delete_button': None, 'deleted': False
+        })
 
     def _add_add_new_field_button(self):
         self.add_field_button = QPushButton(" Add New Field")
@@ -237,30 +251,105 @@ class SecretDetailWidget(QWidget):
         self._set_dirty(True)
         QTimer.singleShot(0, lambda: self._focus_field(len(self.field_rows) - 1))
 
+    def _enter_deep_edit_mode(self, index):
+        if not (0 <= index < len(self.field_rows)) or index == 0 or self.field_rows[index]['is_deep_editing']:
+            return
+        row = self.field_rows[index]
+        row['is_deep_editing'] = True
+        row['key_le'].setText(row['orig_key'])
+        row['label_stack'].setCurrentWidget(row['key_le'])
+        row['le'].setReadOnly(False)
+        delete_button = QPushButton()
+        delete_button.setIcon(qta.icon('fa5s.minus-circle', color='#f38ba8'))
+        delete_button.setToolTip("Delete field (Ctrl+D)")
+        delete_button.setFixedSize(36, 36)
+        delete_button.clicked.connect(lambda: self._prompt_for_delete(index))
+        row['value_layout'].addWidget(delete_button)
+        row['delete_button'] = delete_button
+        row['key_le'].setFocus()
+        self._set_dirty(True)
+
+    def _exit_deep_edit_mode(self, index, reset_values):
+        if not (0 <= index < len(self.field_rows)):
+            return
+        row = self.field_rows[index]
+        if reset_values:
+            row['key_le'].setText(row['orig_key'])
+            row['le'].setText(row['orig_val'])
+        row['label'].setText(f"{row['key_le'].text()}:")
+        row['label_stack'].setCurrentWidget(row['label'])
+        row['le'].setReadOnly(True)
+        if row['delete_button']:
+            row['delete_button'].deleteLater()
+            row['delete_button'] = None
+        row['is_deep_editing'] = False
+        self._check_for_changes()
+        QTimer.singleShot(0, lambda: self._focus_field(index))
+
+    def _confirm_and_apply_deep_edit(self, index):
+        if not (0 <= index < len(self.field_rows)):
+            return
+        row = self.field_rows[index]
+        new_key = row['key_le'].text().strip()
+        new_value = row['le'].text()
+        if not new_key:
+            self._show_status("Field name cannot be empty.", "error")
+            return
+        if new_key == row['orig_key'] and new_value == row['orig_val']:
+            self._exit_deep_edit_mode(index, reset_values=False)
+            return
+        dialog = ConfirmationDialog(self)
+        dialog.message_label.setText("Apply changes to this field?")
+        if dialog.exec() == QDialog.Accepted:
+            row['orig_key'] = new_key
+            row['orig_val'] = new_value
+            self._exit_deep_edit_mode(index, reset_values=False)
+            self._set_dirty(True)
+        else:
+            self._exit_deep_edit_mode(index, reset_values=True)
+
+    def _prompt_for_delete(self, index):
+        if not (0 <= index < len(self.field_rows)):
+            return
+        row = self.field_rows[index]
+        if not row.get('is_deep_editing', False):
+            return
+        dialog = ConfirmationDialog(self)
+        dialog.message_label.setText("Permanently delete this field?")
+        if dialog.exec() == QDialog.Accepted:
+            self._delete_row(index)
+
+    def _delete_row(self, index):
+        if not (0 <= index < len(self.field_rows)):
+            return
+        row = self.field_rows[index]
+        row['deleted'] = True
+        row['container'].hide()
+        self._set_dirty(True)
+
     def _set_dirty(self, dirty):
         self.is_dirty = dirty
         self.save_button.setEnabled(dirty)
 
     def _check_for_changes(self):
         for row in self.field_rows:
-            if row['le'].text() != row['orig_val']:
+            if row.get('deleted', False):
                 self._set_dirty(True)
                 return
-
+            if row['orig_key'] != row['key_le'].text() or row['orig_val'] != row['le'].text():
+                 self._set_dirty(True)
+                 return
         if self.new_rows:
             self._set_dirty(True)
             return
-
         self._set_dirty(False)
 
     def _prompt_to_save(self):
         if not self.is_dirty:
             return
-        
         if self.new_rows:
             self._show_status("You have unconfirmed fields. Press Enter to confirm them first.", "info")
             return
-
         dialog = ConfirmationDialog(self)
         if dialog.exec() == QDialog.Accepted:
             self._save_changes()
@@ -268,19 +357,22 @@ class SecretDetailWidget(QWidget):
     def _save_changes(self):
         content_lines = []
         password = ""
-        # Ensure password is first
         for row in self.field_rows:
-            if row['label'].text() == "secret:":
-                password = row['le'].text()
+            if row.get('deleted', False):
+                continue
+            key = row['orig_key']
+            if key == "secret":
+                password = row['orig_val']
                 break
         content_lines.append(password)
 
-        # Add other fields in their visual order
         for row in self.field_rows:
-            key = row['label'].text().strip(':')
+            if row.get('deleted', False):
+                continue
+            key = row['orig_key']
             if key == "secret":
                 continue
-            value = row['le'].text()
+            value = row['orig_val']
             content_lines.append(f"{key}: {value}")
         
         final_content = "\n".join(content_lines)
@@ -309,19 +401,24 @@ class SecretDetailWidget(QWidget):
 
     def _on_field_focus_in(self, event, container):
         container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
-        QLineEdit.focusInEvent(container.findChild(QLineEdit), event)
 
     def _on_field_focus_out(self, event, container):
         container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
         line_edit = container.findChild(QLineEdit)
         if line_edit and not line_edit.isReadOnly():
+            is_deep_editing = False
+            for row in self.field_rows:
+                if row['le'] is line_edit and row['is_deep_editing']:
+                    is_deep_editing = True
+                    break
+            if is_deep_editing:
+                return
             focus_dest = QApplication.focusWidget()
             if focus_dest and focus_dest.parent() == line_edit.parent():
                 pass
             else:
                 line_edit.setReadOnly(True)
                 self._show_status("")
-        QLineEdit.focusOutEvent(line_edit, event)
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
@@ -346,15 +443,10 @@ class SecretDetailWidget(QWidget):
         if not message:
             self.status_label.setText("")
             return
-
         color = extra['primaryTextColor']
-        if toast_type == "success":
-            color = "#a6e3a1"
-        elif toast_type == "error":
-            color = "#f38ba8"
-        elif toast_type == "info":
-            color = "#89b4fa"
-
+        if toast_type == "success": color = "#a6e3a1"
+        elif toast_type == "error": color = "#f38ba8"
+        elif toast_type == "info": color = "#89b4fa"
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")
         QTimer.singleShot(3000, lambda: self.status_label.setText(""))
@@ -371,6 +463,20 @@ class SecretDetailWidget(QWidget):
                         return True
                     return super().eventFilter(obj, event)
 
+            focused_row_index = -1
+            for i, row in enumerate(self.field_rows):
+                if obj is row['le'] or obj is row['key_le']:
+                    focused_row_index = i
+                    break
+            
+            if focused_row_index != -1:
+                self.current_field_index = focused_row_index
+                row_data = self.field_rows[focused_row_index]
+
+                if row_data['is_deep_editing'] and key in (Qt.Key_Return, Qt.Key_Enter):
+                    self._confirm_and_apply_deep_edit(focused_row_index)
+                    return True
+
             if key == Qt.Key_Escape:
                 focused_widget = QApplication.focusWidget()
                 if isinstance(focused_widget, QLineEdit) and not focused_widget.isReadOnly():
@@ -384,39 +490,26 @@ class SecretDetailWidget(QWidget):
             if not is_our_field:
                 return super().eventFilter(obj, event)
             
-            current_le = obj
-            
-            for i, row in enumerate(self.field_rows):
-                if obj == row['le']:
-                    self.current_field_index = i
-                    break
-            
             if key in (Qt.Key_Return, Qt.Key_Enter):
-                if current_le.isReadOnly():
-                    self._copy_to_clipboard(current_le.text())
-                else:
-                    current_le.clearFocus()
+                if obj.isReadOnly(): self._copy_to_clipboard(obj.text())
+                else: obj.clearFocus()
                 return True
             elif key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
-                next_index = (self.current_field_index + 1) % len(self.field_rows)
-                self._focus_field(next_index)
+                self._focus_field((self.current_field_index + 1) % len(self.field_rows))
                 return True
             elif key == Qt.Key_Up or (key == Qt.Key_Tab and modifiers == Qt.ShiftModifier):
-                prev_index = (self.current_field_index - 1) % len(self.field_rows)
-                self._focus_field(prev_index)
+                self._focus_field((self.current_field_index - 1) % len(self.field_rows))
+                return True
+            elif modifiers == (Qt.ControlModifier | Qt.ShiftModifier) and key == Qt.Key_E:
+                self._enter_deep_edit_mode(self.current_field_index)
                 return True
             elif modifiers == Qt.ControlModifier:
-                if key == Qt.Key_S:
-                    self._prompt_to_save()
-                    return True
-                elif key == Qt.Key_C:
-                    self._copy_to_clipboard(current_le.text())
-                    return True
-                elif key == Qt.Key_E:
-                    self._enable_editing(current_le)
-                    return True
-                elif key == Qt.Key_T:
-                    self._toggle_visibility(current_le, self.field_rows[self.current_field_index]['toggle_btn'])
-                    return True
+                if key == Qt.Key_S: self._prompt_to_save()
+                elif key == Qt.Key_C: self._copy_to_clipboard(obj.text())
+                elif key == Qt.Key_E: self._enable_editing(obj)
+                elif key == Qt.Key_T: self._toggle_visibility(obj, self.field_rows[self.current_field_index]['toggle_btn'])
+                elif key == Qt.Key_D: self._prompt_for_delete(self.current_field_index)
+                else: return super().eventFilter(obj, event)
+                return True
         
         return super().eventFilter(obj, event)

@@ -226,7 +226,7 @@ class MainWindow(QMainWindow):
         self.search_bar.selectAll()
 
     def _show_details_view(self):
-        self.help_widget.setText("<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Copy:</b> Enter, Ctrl+C &nbsp;&nbsp; <b>Edit:</b> Ctrl+E &nbsp;&nbsp; <b>Save:</b> Ctrl+S &nbsp;&nbsp; <b>Back:</b> Esc")
+        self.help_widget.setText("<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Copy:</b> Enter, Ctrl+C &nbsp;&nbsp; <b>Edit:</b> Ctrl+E &nbsp;&nbsp; <b>Deep Edit:</b> Ctrl+Shift+E &nbsp;&nbsp; <b>Delete Field:</b> Ctrl+D &nbsp;&nbsp; <b>Save:</b> Ctrl+S &nbsp;&nbsp; <b>Back:</b> Esc")
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)
