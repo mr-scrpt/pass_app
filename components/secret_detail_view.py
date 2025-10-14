@@ -111,7 +111,7 @@ class SecretDetailWidget(QWidget):
         self._add_add_new_field_button()
 
         if self.field_rows:
-            self._focus_field(0)
+            QTimer.singleShot(0, lambda: self._focus_field(0))
 
     def _add_form_row(self, key, value, is_password=False):
         row_container = QWidget()
@@ -308,6 +308,18 @@ class SecretDetailWidget(QWidget):
         else:
             self._exit_deep_edit_mode(index, reset_values=True)
 
+    def _handle_esc_in_deep_edit(self, index):
+        row = self.field_rows[index]
+        has_changes = (row['key_le'].text() != row['orig_key']) or (row['le'].text() != row['orig_val'])
+        if not has_changes:
+            self._exit_deep_edit_mode(index, reset_values=False)
+            return
+        
+        dialog = ConfirmationDialog(self)
+        dialog.message_label.setText("Discard changes to this field?")
+        if dialog.exec() == QDialog.Accepted:
+            self._exit_deep_edit_mode(index, reset_values=True)
+
     def _prompt_for_delete(self, index):
         if not (0 <= index < len(self.field_rows)):
             return
@@ -473,9 +485,13 @@ class SecretDetailWidget(QWidget):
                 self.current_field_index = focused_row_index
                 row_data = self.field_rows[focused_row_index]
 
-                if row_data['is_deep_editing'] and key in (Qt.Key_Return, Qt.Key_Enter):
-                    self._confirm_and_apply_deep_edit(focused_row_index)
-                    return True
+                if row_data['is_deep_editing']:
+                    if key in (Qt.Key_Return, Qt.Key_Enter):
+                        self._confirm_and_apply_deep_edit(focused_row_index)
+                        return True
+                    if key == Qt.Key_Escape:
+                        self._handle_esc_in_deep_edit(focused_row_index)
+                        return True
 
             if key == Qt.Key_Escape:
                 focused_widget = QApplication.focusWidget()
