@@ -334,17 +334,17 @@ class SecretDetailWidget(QWidget):
             self._focus_field(len(self.field_rows) -1)
             return
 
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Unconfirmed Field")
-        msg_box.setText("You have an unconfirmed new field.")
-        save_button = msg_box.addButton("Save Field", QMessageBox.AcceptRole)
-        discard_button = msg_box.addButton("Discard", QMessageBox.DestructiveRole)
-        msg_box.addButton("Cancel", QMessageBox.RejectRole)
-        msg_box.exec()
+        dialog = ConfirmationDialog(self, 
+            text="You have an unconfirmed new field.",
+            confirm_text="Save Field",
+            cancel_text="Cancel",
+            third_button_text="Discard"
+        )
+        result = dialog.exec()
 
-        if msg_box.clickedButton() == save_button:
+        if result == QDialog.Accepted:
             self._confirm_and_convert_field(row_data)
-        elif msg_box.clickedButton() == discard_button:
+        elif result == dialog.third_button_role:
             self._remove_new_field_row(row_data)
 
     def _prompt_for_delete(self, index):
