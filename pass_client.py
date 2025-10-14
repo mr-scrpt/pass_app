@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         return True
 
     def handle_advanced_generate(self, event):
-        dialog = PasswordGeneratorDialog(self)
+        dialog = PasswordGeneratorDialog(self, show_status_callback=self.status_bar.show_status)
         dialog.exec()
         return True
 
