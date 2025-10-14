@@ -235,7 +235,7 @@ class SecretDetailWidget(QWidget):
         self._add_form_row(key, value)
         self._add_add_new_field_button()
         self._set_dirty(True)
-        self._focus_field(len(self.field_rows) - 1)
+        QTimer.singleShot(0, lambda: self._focus_field(len(self.field_rows) - 1))
 
     def _set_dirty(self, dirty):
         self.is_dirty = dirty
