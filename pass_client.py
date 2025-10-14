@@ -20,7 +20,10 @@ from components.confirmation_dialog import ConfirmationDialog
 from components.hotkey_help import HotkeyHelpWidget
 from components.secret_detail_view import SecretDetailWidget
 from components.secret_list_item import SecretListItem
+from components.password_generator_dialog import PasswordGeneratorDialog
+from components.status_bar import StatusBarWidget
 from hotkey_manager import HotkeyManager
+from utils import generate_password
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -29,7 +32,7 @@ class MainWindow(QMainWindow):
         self.namespace_colors = {}
         self.current_selected_item = None
         self.setWindowTitle("Pass Suite")
-        self.resize(600, 450)
+        self.resize(800, 600)
 
         self.hotkey_manager = HotkeyManager()
 
@@ -41,6 +44,9 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
+
+        self.status_bar = StatusBarWidget()
+        main_layout.addWidget(self.status_bar)
 
         self.help_widget = HotkeyHelpWidget()
         main_layout.addWidget(self.help_widget)
@@ -59,7 +65,8 @@ class MainWindow(QMainWindow):
         # --- Details View ---
         self.details_widget = SecretDetailWidget(
             back_callback=self._show_search_view,
-            save_callback=self._save_secret
+            save_callback=self._save_secret,
+            show_status_callback=self.status_bar.show_status
         )
         self.stack.addWidget(self.details_widget)
 
@@ -68,23 +75,25 @@ class MainWindow(QMainWindow):
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
         self.results_list.currentItemChanged.connect(self._on_selection_changed)
+        self.details_widget.state_changed.connect(self.update_help_text)
         
         self.installEventFilter(self)
         self._register_hotkeys()
         self._show_search_view()
 
     def _register_hotkeys(self):
-        # Global hotkeys (high priority)
+        # Global
+        self.hotkey_manager.register('ctrl+g', self.handle_simple_generate, priority=20)
+        self.hotkey_manager.register('ctrl+shift+g', self.handle_advanced_generate, priority=20)
         self.hotkey_manager.register('esc', self.handle_esc, priority=10)
         self.hotkey_manager.register('ctrl+s', self.handle_save, priority=10)
+        self.hotkey_manager.register('ctrl+n', self.handle_add_field, priority=8)
 
-        # Search view hotkeys (low priority)
+        # Search view
         self.hotkey_manager.register('down', self.handle_search_nav, priority=5)
         self.hotkey_manager.register('up', self.handle_search_nav, priority=5)
         self.hotkey_manager.register('return', self.handle_search_activate, priority=5)
         self.hotkey_manager.register('enter', self.handle_search_activate, priority=5)
-
-        self.hotkey_manager.register('ctrl+n', self.handle_add_field, priority=8)
 
     def eventFilter(self, source, event):
         if event.type() == QEvent.KeyPress:
@@ -92,16 +101,42 @@ class MainWindow(QMainWindow):
                 return True
         return super().eventFilter(source, event)
 
+    def update_help_text(self, state):
+        help_texts = {
+            "search": "<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>View:</b> Enter &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G",
+            "normal": "<b>Nav:</b> ↑/↓ &nbsp;<b>Copy:</b> Enter &nbsp;<b>Edit:</b> Ctrl+E &nbsp;<b>Deep Edit:</b> Ctrl+Shift+E &nbsp;<b>New Field:</b> Ctrl+N &nbsp;<b>Save:</b> Ctrl+S &nbsp;<b>Back:</b> Esc",
+            "edit": "<b>Cancel Edit:</b> Esc",
+            "deep_edit": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Delete:</b> Ctrl+D &nbsp;&nbsp; <b>Cancel:</b> Esc",
+            "add_new": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
+        }
+        text = help_texts.get(state, "")
+        self.help_widget.setText(text)
+
     # --- Hotkey Handlers ---
+    def handle_simple_generate(self, event):
+        password = generate_password()
+        QApplication.clipboard().setText(password)
+        self.status_bar.show_status("Password generated and copied to clipboard.")
+        return True
+
+    def handle_advanced_generate(self, event):
+        dialog = PasswordGeneratorDialog(self)
+        dialog.exec()
+        return True
+
     def handle_esc(self, event):
         if self.stack.currentWidget() == self.details_widget:
-            self.details_widget.back_button.click()
-            return True
+            return False
         return False
 
     def handle_save(self, event):
         if self.stack.currentWidget() == self.details_widget:
-            self.details_widget._prompt_to_save()
+            return False
+        return False
+
+    def handle_add_field(self, event):
+        if self.stack.currentWidget() == self.details_widget:
+            self.details_widget.add_new_field_row()
             return True
         return False
 
@@ -113,15 +148,10 @@ class MainWindow(QMainWindow):
         return False
 
     def handle_search_activate(self, event):
-        if self.stack.currentWidget() == self.search_view and self.results_list.currentItem():
-            self._on_item_activated(self.results_list.currentItem())
-            return True
-        return False
-
-    def handle_add_field(self, event):
-        if self.stack.currentWidget() == self.details_widget:
-            self.details_widget.add_new_field_row()
-            return True
+        if self.stack.currentWidget() == self.search_view and self.results_list.hasFocus():
+            if self.results_list.currentItem():
+                self._on_item_activated(self.results_list.currentItem())
+                return True
         return False
 
     # --- Data & UI Logic ---
@@ -220,13 +250,13 @@ class MainWindow(QMainWindow):
             if dialog.exec() != QDialog.Accepted:
                 return
 
-        self.help_widget.setText("<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>View Secret:</b> Enter")
+        self.update_help_text("search")
         self.stack.setCurrentIndex(0)
         self.search_bar.setFocus()
         self.search_bar.selectAll()
 
     def _show_details_view(self):
-        self.help_widget.setText("<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Copy:</b> Enter, Ctrl+C &nbsp;&nbsp; <b>Edit:</b> Ctrl+E &nbsp;&nbsp; <b>Deep Edit:</b> Ctrl+Shift+E &nbsp;&nbsp; <b>Delete Field:</b> Ctrl+D &nbsp;&nbsp; <b>Save:</b> Ctrl+S &nbsp;&nbsp; <b>Back:</b> Esc")
+        self.update_help_text("normal")
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)

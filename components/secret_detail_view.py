@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPoint
+from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPoint, Signal
 from PySide6.QtGui import QKeyEvent, QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,7 +12,8 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QDialog,
     QStackedWidget,
-    QSizePolicy
+    QSizePolicy,
+    QMessageBox
 )
 import qtawesome as qta
 
@@ -21,10 +22,13 @@ from components.confirmation_dialog import ConfirmationDialog
 from backend_utils import get_secret_from_backend
 
 class SecretDetailWidget(QWidget):
-    def __init__(self, back_callback, save_callback):
+    state_changed = Signal(str) # Emits the name of the new state
+
+    def __init__(self, back_callback, save_callback, show_status_callback):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
+        self.show_status = show_status_callback
         self.field_rows = []
         self.new_rows = []
         self.current_field_index = 0
@@ -74,15 +78,6 @@ class SecretDetailWidget(QWidget):
         
         scroll_area.setWidget(self.form_container)
         self.main_layout.addWidget(scroll_area)
-
-        status_layout = QHBoxLayout()
-        status_layout.setContentsMargins(15, 2, 15, 2)
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        status_layout.addStretch(1)
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch(1)
-        self.main_layout.addLayout(status_layout)
 
     def populate_data(self, secret_data, secret_name, namespace, resource):
         self.title_label.setText(secret_name)
@@ -224,32 +219,41 @@ class SecretDetailWidget(QWidget):
         self.new_rows.append(row_data)
         self._check_for_changes()
         key_edit.setFocus()
+        self.state_changed.emit("add_new")
 
     def _remove_new_field_row(self, row_data):
         if row_data in self.new_rows:
             self.new_rows.remove(row_data)
             row_data['widget'].deleteLater()
             self._check_for_changes()
+            self.state_changed.emit("normal")
 
     def _confirm_and_convert_field(self, row_data):
         key = row_data['key_le'].text().strip()
         value = row_data['val_le'].text()
 
-        if not key or not value:
-            self._show_status("Field name and value cannot be empty.", "error")
-            return
+        if not key:
+            self.show_status("Field name cannot be empty.", "error")
+            row_data['key_le'].setFocus()
+            return False
+        if not value:
+            self.show_status("Field value cannot be empty.", "error")
+            row_data['val_le'].setFocus()
+            return False
 
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText(f"Add field '{key}' to the secret?")
         if dialog.exec() != QDialog.Accepted:
-            return
+            return False
 
         self._remove_new_field_row(row_data)
         self.form_layout.removeRow(self.add_field_button)
         self._add_form_row(key, value)
         self._add_add_new_field_button()
         self._set_dirty(True)
+        self.state_changed.emit("normal")
         QTimer.singleShot(0, lambda: self._focus_field(len(self.field_rows) - 1))
+        return True
 
     def _enter_deep_edit_mode(self, index):
         if not (0 <= index < len(self.field_rows)) or index == 0 or self.field_rows[index]['is_deep_editing']:
@@ -268,6 +272,7 @@ class SecretDetailWidget(QWidget):
         row['delete_button'] = delete_button
         row['key_le'].setFocus()
         self._set_dirty(True)
+        self.state_changed.emit("deep_edit")
 
     def _exit_deep_edit_mode(self, index, reset_values):
         if not (0 <= index < len(self.field_rows)):
@@ -284,6 +289,7 @@ class SecretDetailWidget(QWidget):
             row['delete_button'] = None
         row['is_deep_editing'] = False
         self._check_for_changes()
+        self.state_changed.emit("normal")
         QTimer.singleShot(0, lambda: self._focus_field(index))
 
     def _confirm_and_apply_deep_edit(self, index):
@@ -293,7 +299,7 @@ class SecretDetailWidget(QWidget):
         new_key = row['key_le'].text().strip()
         new_value = row['le'].text()
         if not new_key:
-            self._show_status("Field name cannot be empty.", "error")
+            self.show_status("Field name cannot be empty.", "error")
             return
         if new_key == row['orig_key'] and new_value == row['orig_val']:
             self._exit_deep_edit_mode(index, reset_values=False)
@@ -319,6 +325,27 @@ class SecretDetailWidget(QWidget):
         dialog.message_label.setText("Discard changes to this field?")
         if dialog.exec() == QDialog.Accepted:
             self._exit_deep_edit_mode(index, reset_values=True)
+
+    def _handle_esc_in_new_field(self, row_data):
+        key_text = row_data['key_le'].text()
+        val_text = row_data['val_le'].text()
+        if not key_text and not val_text:
+            self._remove_new_field_row(row_data)
+            self._focus_field(len(self.field_rows) -1)
+            return
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Unconfirmed Field")
+        msg_box.setText("You have an unconfirmed new field.")
+        save_button = msg_box.addButton("Save Field", QMessageBox.AcceptRole)
+        discard_button = msg_box.addButton("Discard", QMessageBox.DestructiveRole)
+        msg_box.addButton("Cancel", QMessageBox.RejectRole)
+        msg_box.exec()
+
+        if msg_box.clickedButton() == save_button:
+            self._confirm_and_convert_field(row_data)
+        elif msg_box.clickedButton() == discard_button:
+            self._remove_new_field_row(row_data)
 
     def _prompt_for_delete(self, index):
         if not (0 <= index < len(self.field_rows)):
@@ -360,7 +387,7 @@ class SecretDetailWidget(QWidget):
         if not self.is_dirty:
             return
         if self.new_rows:
-            self._show_status("You have unconfirmed fields. Press Enter to confirm them first.", "info")
+            self.show_status("You have unconfirmed fields. Press Enter to confirm them first.", "info")
             return
         dialog = ConfirmationDialog(self)
         if dialog.exec() == QDialog.Accepted:
@@ -391,16 +418,17 @@ class SecretDetailWidget(QWidget):
         
         result = self.save_callback(self.namespace, self.resource, final_content)
         if result and result.get("status") == "success":
-            self._show_status("Saved!", "success")
+            self.show_status("Saved!", "success")
             new_details = get_secret_from_backend(self.namespace, self.resource)
             self.populate_data(new_details, self.title_label.text(), self.namespace, self.resource)
         else:
-            self._show_status(f"Save failed: {result.get('message', 'Unknown error')}", "error")
+            self.show_status(f"Save failed: {result.get('message', 'Unknown error')}", "error")
 
     def _enable_editing(self, line_edit):
+        self.state_changed.emit("edit")
         line_edit.setReadOnly(False)
         line_edit.setFocus()
-        self._show_status("Editing enabled", "info")
+        self.show_status("Editing enabled", "info")
 
     def _cancel_editing(self, line_edit):
         for row in self.field_rows:
@@ -408,8 +436,9 @@ class SecretDetailWidget(QWidget):
                 line_edit.setText(row['orig_val'])
                 break
         line_edit.setReadOnly(True)
-        self._show_status("Edit cancelled", "info")
+        self.show_status("Edit cancelled", "info")
         self._check_for_changes()
+        self.state_changed.emit("normal")
 
     def _on_field_focus_in(self, event, container):
         container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
@@ -430,7 +459,7 @@ class SecretDetailWidget(QWidget):
                 pass
             else:
                 line_edit.setReadOnly(True)
-                self._show_status("")
+                self.show_status("")
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
@@ -441,7 +470,7 @@ class SecretDetailWidget(QWidget):
             button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
 
     def _copy_to_clipboard(self, text):
-        self._show_status("Copied!", "success")
+        self.show_status("Copied!", "success")
         QApplication.clipboard().setText(text)
 
     def _focus_field(self, index):
@@ -451,81 +480,88 @@ class SecretDetailWidget(QWidget):
             line_edit.setFocus()
             line_edit.selectAll()
 
-    def _show_status(self, message, toast_type="success"):
-        if not message:
-            self.status_label.setText("")
-            return
-        color = extra['primaryTextColor']
-        if toast_type == "success": color = "#a6e3a1"
-        elif toast_type == "error": color = "#f38ba8"
-        elif toast_type == "info": color = "#89b4fa"
-        self.status_label.setText(message)
-        self.status_label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")
-        QTimer.singleShot(3000, lambda: self.status_label.setText(""))
-
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            key = event.key()
-            modifiers = event.modifiers()
+        if event.type() != QEvent.KeyPress:
+            return super().eventFilter(obj, event)
 
-            for row_data in self.new_rows:
-                if obj is row_data['key_le'] or obj is row_data['val_le']:
-                    if key in (Qt.Key_Return, Qt.Key_Enter):
-                        self._confirm_and_convert_field(row_data)
-                        return True
-                    return super().eventFilter(obj, event)
+        key = event.key()
+        modifiers = event.modifiers()
 
-            focused_row_index = -1
-            for i, row in enumerate(self.field_rows):
-                if obj is row['le'] or obj is row['key_le']:
-                    focused_row_index = i
-                    break
-            
-            if focused_row_index != -1:
-                self.current_field_index = focused_row_index
-                row_data = self.field_rows[focused_row_index]
-
-                if row_data['is_deep_editing']:
-                    if key in (Qt.Key_Return, Qt.Key_Enter):
-                        self._confirm_and_apply_deep_edit(focused_row_index)
-                        return True
-                    if key == Qt.Key_Escape:
-                        self._handle_esc_in_deep_edit(focused_row_index)
-                        return True
-
-            if key == Qt.Key_Escape:
-                focused_widget = QApplication.focusWidget()
-                if isinstance(focused_widget, QLineEdit) and not focused_widget.isReadOnly():
-                    self._cancel_editing(focused_widget)
+        # CONTEXT 1: A new, unconfirmed row is focused
+        for row_data in self.new_rows:
+            if obj is row_data['key_le'] or obj is row_data['val_le']:
+                if key == Qt.Key_Escape:
+                    self._handle_esc_in_new_field(row_data)
                     return True
-                else:
+                if key in (Qt.Key_Return, Qt.Key_Enter):
+                    self._confirm_and_convert_field(row_data)
+                    return True
+                return super().eventFilter(obj, event) # Allow normal typing
+
+        # CONTEXT 2: An existing field row is focused
+        focused_row_index = -1
+        for i, row in enumerate(self.field_rows):
+            if obj is row['le'] or obj is row['key_le']:
+                focused_row_index = i
+                break
+        
+        if focused_row_index != -1:
+            self.current_field_index = focused_row_index
+            row_data = self.field_rows[focused_row_index]
+
+            # SUB-CONTEXT: Deep Edit Mode
+            if row_data['is_deep_editing']:
+                if key == Qt.Key_Escape:
+                    self._handle_esc_in_deep_edit(focused_row_index)
+                    return True
+                if key in (Qt.Key_Return, Qt.Key_Enter):
+                    self._confirm_and_apply_deep_edit(focused_row_index)
+                    return True
+                if modifiers == Qt.ControlModifier and key == Qt.Key_D:
+                    self._prompt_for_delete(focused_row_index)
+                    return True
+                # In deep edit, block other navigation hotkeys
+                return super().eventFilter(obj, event)
+
+            # SUB-CONTEXT: Normal or Value-Edit Mode
+            if key == Qt.Key_Escape:
+                if not obj.isReadOnly(): # In normal value-edit mode
+                    self._cancel_editing(obj)
+                    return True
+                else: # Not editing, so global Esc to go back
                     self.back_button.click()
                     return True
 
-            is_our_field = any(obj == row['le'] for row in self.field_rows)
-            if not is_our_field:
-                return super().eventFilter(obj, event)
-            
             if key in (Qt.Key_Return, Qt.Key_Enter):
                 if obj.isReadOnly(): self._copy_to_clipboard(obj.text())
                 else: obj.clearFocus()
                 return True
-            elif key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
+            
+            if key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
                 self._focus_field((self.current_field_index + 1) % len(self.field_rows))
                 return True
-            elif key == Qt.Key_Up or (key == Qt.Key_Tab and modifiers == Qt.ShiftModifier):
+            if key == Qt.Key_Up or (key == Qt.Key_Tab and modifiers == Qt.ShiftModifier):
                 self._focus_field((self.current_field_index - 1) % len(self.field_rows))
                 return True
-            elif modifiers == (Qt.ControlModifier | Qt.ShiftModifier) and key == Qt.Key_E:
+
+            if modifiers == (Qt.ControlModifier | Qt.ShiftModifier) and key == Qt.Key_E:
                 self._enter_deep_edit_mode(self.current_field_index)
                 return True
-            elif modifiers == Qt.ControlModifier:
+            
+            if modifiers == Qt.ControlModifier:
                 if key == Qt.Key_S: self._prompt_to_save()
                 elif key == Qt.Key_C: self._copy_to_clipboard(obj.text())
                 elif key == Qt.Key_E: self._enable_editing(obj)
-                elif key == Qt.Key_T: self._toggle_visibility(obj, self.field_rows[self.current_field_index]['toggle_btn'])
-                elif key == Qt.Key_D: self._prompt_for_delete(self.current_field_index)
+                elif key == Qt.Key_T: self._toggle_visibility(obj, row_data['toggle_btn'])
+                elif key == Qt.Key_D: self._prompt_for_delete(self.current_field_index) # This will now only be called if not in deep edit, which is fine.
                 else: return super().eventFilter(obj, event)
                 return True
-        
+
+            return super().eventFilter(obj, event)
+
+        # CONTEXT 3: No specific field is focused, but we are on the details page
+        if key == Qt.Key_Escape:
+            self.back_button.click()
+            return True
+
         return super().eventFilter(obj, event)
