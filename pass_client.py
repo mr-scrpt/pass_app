@@ -103,14 +103,30 @@ class MainWindow(QMainWindow):
 
     def update_help_text(self, state):
         help_texts = {
-            "search": "<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>View:</b> Enter &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G",
-            "normal": "<b>Nav:</b> ↑/↓ &nbsp;<b>Copy:</b> Enter &nbsp;<b>Edit:</b> Ctrl+E &nbsp;<b>Deep Edit:</b> Ctrl+Shift+E &nbsp;<b>New Field:</b> Ctrl+N &nbsp;<b>Save:</b> Ctrl+S &nbsp;<b>Back:</b> Esc",
-            "edit": "<b>Cancel Edit:</b> Esc",
-            "deep_edit": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Delete:</b> Ctrl+D &nbsp;&nbsp; <b>Cancel:</b> Esc",
-            "add_new": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
+            "search": {
+                "nav": "<b>Navigate:</b> ↑/↓",
+                "action": "<b>View:</b> Enter &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G"
+            },
+            "normal": {
+                "nav": "<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Back:</b> Esc",
+                "action": "<b>Copy:</b> Enter &nbsp;<b>Edit:</b> Ctrl+E &nbsp;<b>Deep Edit:</b> Ctrl+Shift+E &nbsp;<b>New Field:</b> Ctrl+N &nbsp;<b>Save:</b> Ctrl+S"
+            },
+            "edit": {
+                "nav": "",
+                "action": "<b>Cancel Edit:</b> Esc"
+            },
+            "deep_edit": {
+                "nav": "",
+                "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Delete:</b> Ctrl+D &nbsp;&nbsp; <b>Cancel:</b> Esc"
+            },
+            "add_new": {
+                "nav": "",
+                "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
+            }
         }
-        text = help_texts.get(state, "")
-        self.help_widget.setText(text)
+        texts = help_texts.get(state, {"nav": "", "action": ""})
+        full_text = "    ".join(filter(None, [texts['nav'], texts['action']]))
+        self.help_widget.setText(full_text)
 
     # --- Hotkey Handlers ---
     def handle_simple_generate(self, event):
