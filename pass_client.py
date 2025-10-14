@@ -1,27 +1,26 @@
 import sys
-import os
-
 from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QStackedWidget,
+    QDialog
 )
 from qt_material import apply_stylesheet
 
 from backend_utils import get_list_from_backend, get_secret_from_backend, save_secret_to_backend
 from ui_theme import CATPPUCCIN_COLORS, extra
-from components.hotkey_help import HotkeyHelpWidget
 from components.confirmation_dialog import ConfirmationDialog
-from components.secret_list_item import SecretListItem
+from components.hotkey_help import HotkeyHelpWidget
 from components.secret_detail_view import SecretDetailWidget
-
+from components.secret_list_item import SecretListItem
+from hotkey_manager import HotkeyManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -32,7 +31,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Pass Suite")
         self.resize(600, 450)
 
-        # --- Main Layout ---
+        self.hotkey_manager = HotkeyManager()
+
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
         main_layout.setSpacing(0)
@@ -42,24 +42,19 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
-        # --- Shared Hotkey Help Widget ---
         self.help_widget = HotkeyHelpWidget()
-        help_layout = QHBoxLayout()
-        help_layout.addStretch(1)
-        help_layout.addWidget(self.help_widget)
-        help_layout.addStretch(1)
-        main_layout.addLayout(help_layout)
+        main_layout.addWidget(self.help_widget)
 
         # --- Search View ---
-        search_view_widget = QWidget()
-        search_layout = QVBoxLayout(search_view_widget)
+        self.search_view = QWidget()
+        search_layout = QVBoxLayout(self.search_view)
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search secrets...")
         search_layout.addWidget(self.search_bar)
         self.results_list = QListWidget()
         self.results_list.setStyleSheet("QListWidget::item { border: none; padding: 0px; } QListWidget::item:selected { background-color: rgba(137, 180, 250, 0.2); border-left: 3px solid #89b4fa; } QListWidget::item:hover { background-color: rgba(137, 180, 250, 0.1); }")
         search_layout.addWidget(self.results_list)
-        self.stack.addWidget(search_view_widget)
+        self.stack.addWidget(self.search_view)
 
         # --- Details View ---
         self.details_widget = SecretDetailWidget(
@@ -73,23 +68,55 @@ class MainWindow(QMainWindow):
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
         self.results_list.currentItemChanged.connect(self._on_selection_changed)
-        self.search_bar.installEventFilter(self)
         
-        self._show_search_view() # Set initial view and hotkeys
+        self.installEventFilter(self)
+        self._register_hotkeys()
+        self._show_search_view()
+
+    def _register_hotkeys(self):
+        # Global hotkeys (high priority)
+        self.hotkey_manager.register('esc', self.handle_esc, priority=10)
+        self.hotkey_manager.register('ctrl+s', self.handle_save, priority=10)
+
+        # Search view hotkeys (low priority)
+        self.hotkey_manager.register('down', self.handle_search_nav, priority=5)
+        self.hotkey_manager.register('up', self.handle_search_nav, priority=5)
+        self.hotkey_manager.register('return', self.handle_search_activate, priority=5)
+        self.hotkey_manager.register('enter', self.handle_search_activate, priority=5)
 
     def eventFilter(self, source, event):
-        if source == self.search_bar and event.type() == QEvent.KeyPress:
-            key = event.key()
-            if key in (Qt.Key_Down, Qt.Key_Up):
-                self.results_list.setFocus()
-                QApplication.sendEvent(self.results_list, event)
-                return True
-            elif key in (Qt.Key_Return, Qt.Key_Enter):
-                if self.results_list.currentItem():
-                    self._on_item_activated(self.results_list.currentItem())
+        if event.type() == QEvent.KeyPress:
+            if self.hotkey_manager.handle(event):
                 return True
         return super().eventFilter(source, event)
 
+    # --- Hotkey Handlers ---
+    def handle_esc(self, event):
+        if self.stack.currentWidget() == self.details_widget:
+            self.details_widget.back_button.click()
+            return True
+        return False
+
+    def handle_save(self, event):
+        if self.stack.currentWidget() == self.details_widget:
+            self.details_widget._prompt_to_save()
+            return True
+        return False
+
+    def handle_search_nav(self, event):
+        if self.stack.currentWidget() == self.search_view and self.search_bar.hasFocus():
+            self.results_list.setFocus()
+            QApplication.postEvent(self.results_list, QKeyEvent(event))
+            return True
+        return False
+
+    def handle_search_activate(self, event):
+        if self.stack.currentWidget() == self.search_view and self.results_list.currentItem():
+            self._on_item_activated(self.results_list.currentItem())
+            return True
+        return False
+
+    # --- Data & UI Logic ---
     def load_data_and_populate(self):
         backend_data = get_list_from_backend()
         if backend_data is None:

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QFormLayout,
     QScrollArea,
+    QDialog
 )
 import qtawesome as qta
 

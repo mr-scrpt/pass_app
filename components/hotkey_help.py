@@ -12,9 +12,7 @@ class HotkeyHelpWidget(QWidget):
         self.label = QLabel(text)
         self.label.setStyleSheet(f"color: {extra['secondaryColor']}; font-size: 12px; font-weight: bold;")
         self.label.setAlignment(Qt.AlignCenter)
-        layout.addStretch(1)
         layout.addWidget(self.label)
-        layout.addStretch(1)
 
     def setText(self, text):
         self.label.setText(text)
