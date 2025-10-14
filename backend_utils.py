@@ -31,8 +31,18 @@ def save_secret_to_backend(namespace, resource, content):
     try:
         cmd = get_backend_command("create") # 'create' uses 'pass insert' which handles updates
         input_data = json.dumps({"namespace": namespace, "resource": resource, "content": content})
-        result = subprocess.run(cmd, input=input_data, capture_output=True, text=True, check=True)
-        return json.loads(result.stdout)
+        result = subprocess.run(cmd, input=input_data, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return {"status": "success"}
+        else:
+            # Try to parse JSON from stderr for a more detailed error message
+            try:
+                error_data = json.loads(result.stderr)
+                return {"status": "error", "message": error_data.get("error", result.stderr)}
+            except json.JSONDecodeError:
+                return {"status": "error", "message": result.stderr or result.stdout}
+
     except Exception as e:
         print(f"Error saving secret to backend: {e}", file=sys.stderr)
         return {"status": "error", "message": str(e)}
