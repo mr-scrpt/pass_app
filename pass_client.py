@@ -48,8 +48,10 @@ class MainWindow(QMainWindow):
         self.status_bar = StatusBarWidget()
         main_layout.addWidget(self.status_bar)
 
-        self.help_widget = HotkeyHelpWidget()
-        main_layout.addWidget(self.help_widget)
+        self.nav_help_widget = HotkeyHelpWidget()
+        self.action_help_widget = HotkeyHelpWidget()
+        main_layout.addWidget(self.nav_help_widget)
+        main_layout.addWidget(self.action_help_widget)
 
         # --- Search View ---
         self.search_view = QWidget()
@@ -68,6 +70,7 @@ class MainWindow(QMainWindow):
             save_callback=self._save_secret,
             show_status_callback=self.status_bar.show_status
         )
+        self.details_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.details_widget)
 
         # --- Initial Load & Connections ---
@@ -75,21 +78,17 @@ class MainWindow(QMainWindow):
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
         self.results_list.currentItemChanged.connect(self._on_selection_changed)
-        self.details_widget.state_changed.connect(self.update_help_text)
         
         self.installEventFilter(self)
         self._register_hotkeys()
         self._show_search_view()
 
     def _register_hotkeys(self):
-        # Global
         self.hotkey_manager.register('ctrl+g', self.handle_simple_generate, priority=20)
         self.hotkey_manager.register('ctrl+shift+g', self.handle_advanced_generate, priority=20)
         self.hotkey_manager.register('esc', self.handle_esc, priority=10)
         self.hotkey_manager.register('ctrl+s', self.handle_save, priority=10)
         self.hotkey_manager.register('ctrl+n', self.handle_add_field, priority=8)
-
-        # Search view
         self.hotkey_manager.register('down', self.handle_search_nav, priority=5)
         self.hotkey_manager.register('up', self.handle_search_nav, priority=5)
         self.hotkey_manager.register('return', self.handle_search_activate, priority=5)
@@ -125,10 +124,9 @@ class MainWindow(QMainWindow):
             }
         }
         texts = help_texts.get(state, {"nav": "", "action": ""})
-        full_text = "    ".join(filter(None, [texts['nav'], texts['action']]))
-        self.help_widget.setText(full_text)
+        self.nav_help_widget.setText(texts['nav'])
+        self.action_help_widget.setText(texts['action'])
 
-    # --- Hotkey Handlers ---
     def handle_simple_generate(self, event):
         password = generate_password()
         QApplication.clipboard().setText(password)
@@ -141,13 +139,9 @@ class MainWindow(QMainWindow):
         return True
 
     def handle_esc(self, event):
-        if self.stack.currentWidget() == self.details_widget:
-            return False
         return False
 
     def handle_save(self, event):
-        if self.stack.currentWidget() == self.details_widget:
-            return False
         return False
 
     def handle_add_field(self, event):
@@ -170,7 +164,6 @@ class MainWindow(QMainWindow):
                 return True
         return False
 
-    # --- Data & UI Logic ---
     def load_data_and_populate(self):
         backend_data = get_list_from_backend()
         if backend_data is None:
