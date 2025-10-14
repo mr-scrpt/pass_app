@@ -2,12 +2,10 @@ from PySide6.QtCore import Qt, QEvent, QSize, QTimer, QPoint
 from PySide6.QtGui import QKeyEvent, QColor
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLineEdit,
-    QListWidgetItem,
     QPushButton,
     QLabel,
     QFormLayout,
@@ -16,101 +14,7 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 
 from ui_theme import extra
-
-class HotkeyHelpWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setStyleSheet(f"background-color: {extra['primaryColor']}; padding: 8px;")
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(15, 5, 15, 5)
-        self.label = QLabel("")
-        self.label.setStyleSheet(f"color: {extra['secondaryColor']}; font-size: 12px; font-weight: bold;")
-        self.label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.label)
-
-    def setText(self, text):
-        self.label.setText(text)
-
-class ConfirmationDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Confirm Save")
-        self.setModal(True)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        self.message_label = QLabel("Are you sure you want to save the changes?")
-        self.message_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.message_label)
-
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_button)
-
-        confirm_button = QPushButton("Confirm")
-        confirm_button.setDefault(True)
-        confirm_button.setStyleSheet(f"background-color: {extra['primaryColor']}; color: {extra['secondaryColor']};")
-        confirm_button.clicked.connect(self.accept)
-        button_layout.addWidget(confirm_button)
-
-        layout.addLayout(button_layout)
-
-        self.setStyleSheet(f"background-color: {extra['secondaryColor']};")
-
-    def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key_Escape:
-            self.reject()
-        else:
-            super().keyPressEvent(event)
-
-class SecretListItem(QWidget):
-    def __init__(self, namespace, resource, namespace_color, view_callback):
-        super().__init__()
-        self.view_callback = view_callback
-        
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignVCenter)
-        
-        ns_label = QLabel(f"[{namespace}]")
-        ns_label.setStyleSheet(f"color: {namespace_color}; font-size: 16px;")
-        ns_label.setAlignment(Qt.AlignVCenter)
-        layout.addWidget(ns_label)
-        
-        resource_label = QLabel(resource)
-        resource_label.setStyleSheet(f"color: {extra['primaryTextColor']}; font-size: 16px; font-weight: bold;")
-        resource_label.setWordWrap(False)
-        resource_label.setAlignment(Qt.AlignVCenter)
-        layout.addWidget(resource_label, stretch=1)
-        
-        self.buttons_widget = QWidget()
-        self.buttons_widget.setVisible(False)
-        buttons_layout = QHBoxLayout(self.buttons_widget)
-        buttons_layout.setContentsMargins(0, 0, 0, 0)
-        buttons_layout.setSpacing(4)
-        
-        view_btn = QPushButton()
-        view_btn.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
-        view_btn.setToolTip("View (Enter)")
-        view_btn.setFixedSize(32, 32)
-        view_btn.clicked.connect(self.view_callback)
-        buttons_layout.addWidget(view_btn)
-        
-        layout.addWidget(self.buttons_widget)
-        
-        self.setMinimumHeight(44)
-    
-    def set_selected(self, selected):
-        self.buttons_widget.setVisible(selected)
-    
-    def sizeHint(self):
-        return QSize(self.width(), 44)
+from components.confirmation_dialog import ConfirmationDialog
 
 class SecretDetailWidget(QWidget):
     def __init__(self, back_callback, save_callback):
@@ -167,14 +71,14 @@ class SecretDetailWidget(QWidget):
         self.main_layout.addWidget(scroll_area)
 
         # --- Status Bar ---
-        status_bar = QWidget()
-        status_bar.setStyleSheet(f"background-color: {extra['secondaryColor']}; border-top: 1px solid #45475a; padding: 4px;")
-        status_layout = QHBoxLayout(status_bar)
+        status_layout = QHBoxLayout()
         status_layout.setContentsMargins(15, 2, 15, 2)
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignCenter)
+        status_layout.addStretch(1)
         status_layout.addWidget(self.status_label)
-        self.main_layout.addWidget(status_bar)
+        status_layout.addStretch(1)
+        self.main_layout.addLayout(status_layout)
 
     def populate_data(self, secret_details, secret_name, namespace, resource):
         self.title_label.setText(secret_name)

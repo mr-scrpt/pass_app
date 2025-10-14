@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -16,7 +17,10 @@ from qt_material import apply_stylesheet
 
 from backend_utils import get_list_from_backend, get_secret_from_backend, save_secret_to_backend
 from ui_theme import CATPPUCCIN_COLORS, extra
-from ui_widgets import ConfirmationDialog, SecretListItem, SecretDetailWidget, HotkeyHelpWidget
+from components.hotkey_help import HotkeyHelpWidget
+from components.confirmation_dialog import ConfirmationDialog
+from components.secret_list_item import SecretListItem
+from components.secret_detail_view import SecretDetailWidget
 
 
 class MainWindow(QMainWindow):
@@ -40,7 +44,11 @@ class MainWindow(QMainWindow):
 
         # --- Shared Hotkey Help Widget ---
         self.help_widget = HotkeyHelpWidget()
-        main_layout.addWidget(self.help_widget)
+        help_layout = QHBoxLayout()
+        help_layout.addStretch(1)
+        help_layout.addWidget(self.help_widget)
+        help_layout.addStretch(1)
+        main_layout.addLayout(help_layout)
 
         # --- Search View ---
         search_view_widget = QWidget()
