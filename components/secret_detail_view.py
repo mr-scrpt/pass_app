@@ -496,6 +496,18 @@ class SecretDetailWidget(QWidget):
                 if key in (Qt.Key_Return, Qt.Key_Enter):
                     self._confirm_and_convert_field(row_data)
                     return True
+                if key == Qt.Key_Tab:
+                    if obj is row_data['key_le']:
+                        row_data['val_le'].setFocus()
+                    else:
+                        row_data['key_le'].setFocus()
+                    return True
+                if key == Qt.Key_Backtab:
+                    if obj is row_data['val_le']:
+                        row_data['key_le'].setFocus()
+                    else:
+                        row_data['val_le'].setFocus()
+                    return True
                 return super().eventFilter(obj, event) # Allow normal typing
 
         # CONTEXT 2: An existing field row is focused
@@ -520,7 +532,19 @@ class SecretDetailWidget(QWidget):
                 if modifiers == Qt.ControlModifier and key == Qt.Key_D:
                     self._prompt_for_delete(focused_row_index)
                     return True
-                # In deep edit, block other navigation hotkeys
+                if key == Qt.Key_Tab:
+                    if obj is row_data['key_le']:
+                        row_data['le'].setFocus()
+                    else:
+                        row_data['key_le'].setFocus()
+                    return True
+                if key == Qt.Key_Backtab:
+                    if obj is row_data['le']:
+                        row_data['key_le'].setFocus()
+                    else:
+                        row_data['le'].setFocus()
+                    return True
+                # In deep edit, block other navigation hotkeys but allow typing
                 return super().eventFilter(obj, event)
 
             # SUB-CONTEXT: Normal or Value-Edit Mode

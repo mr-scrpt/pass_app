@@ -115,11 +115,11 @@ class MainWindow(QMainWindow):
                 "action": "<b>Cancel Edit:</b> Esc"
             },
             "deep_edit": {
-                "nav": "",
+                "nav": "<b>Navigate:</b> Tab",
                 "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Delete:</b> Ctrl+D &nbsp;&nbsp; <b>Cancel:</b> Esc"
             },
             "add_new": {
-                "nav": "",
+                "nav": "<b>Navigate:</b> Tab",
                 "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
             }
         }
