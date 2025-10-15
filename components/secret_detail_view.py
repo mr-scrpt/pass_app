@@ -478,7 +478,6 @@ class SecretDetailWidget(QWidget):
             self.current_field_index = index
             line_edit = self.field_rows[index]['le']
             line_edit.setFocus()
-            line_edit.selectAll()
 
     def eventFilter(self, obj, event):
         if event.type() != QEvent.KeyPress:
