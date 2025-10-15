@@ -548,16 +548,18 @@ class SecretDetailWidget(QWidget):
 
             # SUB-CONTEXT: Normal or Value-Edit Mode
             if key == Qt.Key_Escape:
-                if not obj.isReadOnly(): # In normal value-edit mode
-                    self._cancel_editing(obj)
+                if not row_data['le'].isReadOnly(): # In normal value-edit mode
+                    self._cancel_editing(row_data['le'])
                     return True
                 else: # Not editing, so global Esc to go back
                     self.back_button.click()
                     return True
 
             if key in (Qt.Key_Return, Qt.Key_Enter):
-                if obj.isReadOnly(): self._copy_to_clipboard(obj.text())
-                else: obj.clearFocus()
+                if row_data['le'].isReadOnly(): 
+                    self._copy_to_clipboard(row_data['le'].text())
+                else: 
+                    row_data['le'].clearFocus()
                 return True
             
             if key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
@@ -573,9 +575,9 @@ class SecretDetailWidget(QWidget):
             
             if modifiers == Qt.ControlModifier:
                 if key == Qt.Key_S: self._prompt_to_save()
-                elif key == Qt.Key_C: self._copy_to_clipboard(obj.text())
-                elif key == Qt.Key_E: self._enable_editing(obj)
-                elif key == Qt.Key_T: self._toggle_visibility(obj, row_data['toggle_btn'])
+                elif key == Qt.Key_C: self._copy_to_clipboard(row_data['le'].text())
+                elif key == Qt.Key_E: self._enable_editing(row_data['le'])
+                elif key == Qt.Key_T: self._toggle_visibility(row_data['le'], row_data['toggle_btn'])
                 elif key == Qt.Key_D: self._prompt_for_delete(self.current_field_index) # This will now only be called if not in deep edit, which is fine.
                 else: return super().eventFilter(obj, event)
                 return True
