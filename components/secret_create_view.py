@@ -136,6 +136,8 @@ class SecretCreateWidget(QWidget):
         self.namespace_resources = namespace_resources or {}  # {namespace: [resource1, resource2, ...]}
         self.selected_namespace = None
         self.namespace_buttons = []
+        self.current_focus_index = 0  # Track current focused element (0 = tags, 1 = resource_input, 2+ = field_rows)
+        self.current_tag_index = 0  # Track current focused tag
         
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setSpacing(0)
@@ -174,15 +176,39 @@ class SecretCreateWidget(QWidget):
         
         self.form_container = QWidget()
         self.form_layout = QVBoxLayout(self.form_container)
-        self.form_layout.setSpacing(15)
+        self.form_layout.setSpacing(5)  # Reduce spacing between sections
         self.form_layout.setContentsMargins(20, 10, 20, 20)
         
         # Namespace section: left (tags with scroll) + right (NEW button)
-        namespace_main_container = QWidget()
-        namespace_main_container.setMaximumHeight(150)  # Limit container height for 3 rows
-        namespace_main_layout = QHBoxLayout(namespace_main_container)
+        # Wrapper for border highlight
+        tags_section_wrapper = QWidget()
+        tags_section_wrapper.setMaximumHeight(150)  # Limit wrapper height
+        tags_section_wrapper.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tags_wrapper_layout = QHBoxLayout(tags_section_wrapper)
+        tags_wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        tags_wrapper_layout.setSpacing(0)
+        
+        self.namespace_main_container = QWidget()
+        self.namespace_main_container.setStyleSheet("QWidget { background-color: transparent; }")
+        self.namespace_main_container.setFocusPolicy(Qt.StrongFocus)
+        self.namespace_main_container.keyPressEvent = self._handle_tags_keypress
+        
+        # Border indicator for highlight
+        self.tags_border_indicator = QWidget()
+        self.tags_border_indicator.setFixedWidth(3)
+        self.tags_border_indicator.setStyleSheet("background-color: transparent;")
+        tags_wrapper_layout.addWidget(self.tags_border_indicator)
+        
+        # Container for tags
+        tags_content_container = QWidget()
+        tags_content_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tags_content_layout = QHBoxLayout(tags_content_container)
+        tags_content_layout.setContentsMargins(8, 0, 0, 0)
+        tags_content_layout.setSpacing(0)
+        namespace_main_layout = QHBoxLayout()
         namespace_main_layout.setSpacing(10)
         namespace_main_layout.setContentsMargins(0, 0, 0, 0)
+        tags_content_layout.addLayout(namespace_main_layout)
         
         # Left section: tags with FlowLayout and scroll
         self.tags_container = QWidget()
@@ -203,6 +229,7 @@ class SecretCreateWidget(QWidget):
         
         # Right section: NEW button container
         new_button_container = QWidget()
+        new_button_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         new_button_layout = QVBoxLayout(new_button_container)
         new_button_layout.setContentsMargins(0, 0, 0, 0)
         new_button_layout.setSpacing(0)
@@ -220,15 +247,29 @@ class SecretCreateWidget(QWidget):
         new_button_layout.addWidget(self.new_namespace_button)
         namespace_main_layout.addWidget(new_button_container)  # Fixed width on the right
         
-        self.form_layout.addWidget(namespace_main_container)
+        self.namespace_main_container.setLayout(tags_content_layout)
+        tags_wrapper_layout.addWidget(self.namespace_main_container, stretch=1)
         
-        # Resource name input (compact)
-        self.resource_input = QLineEdit()
+        self.form_layout.addWidget(tags_section_wrapper)
+        
+        # Resource name input (compact) with container for border highlight
+        self.resource_input_container = QWidget()
+        self.resource_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+        resource_input_layout = QHBoxLayout(self.resource_input_container)
+        resource_input_layout.setContentsMargins(0, 0, 0, 0)
+        resource_input_layout.setSpacing(0)
+        
+        self.resource_input = StyledLineEdit()
         self.resource_input.setPlaceholderText("Resource Name")
         self.resource_input.setStyleSheet("QLineEdit { font-size: 15px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         self.resource_input.textChanged.connect(self._check_for_changes)
+        self.resource_input.navigation.connect(self._handle_navigation)
+        self.resource_input.focusInEvent = lambda e: self._on_resource_focus_in(e)
+        self.resource_input.focusOutEvent = lambda e: self._on_resource_focus_out(e)
+        resource_input_layout.addWidget(self.resource_input)
         
-        self.form_layout.addWidget(self.resource_input)
+        self.form_layout.addWidget(self.resource_input_container)
         
         # Separator (thinner)
         separator = QWidget()
@@ -238,8 +279,9 @@ class SecretCreateWidget(QWidget):
         
         # Fields form container
         self.fields_form_layout = QFormLayout()
-        self.fields_form_layout.setSpacing(10)
+        self.fields_form_layout.setSpacing(5)  # Reduce spacing like on detail page
         self.fields_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self.fields_form_layout.setContentsMargins(0, 0, 0, 0)
         self.form_layout.addLayout(self.fields_form_layout)
         
         scroll_area.setWidget(self.form_container)
@@ -259,25 +301,6 @@ class SecretCreateWidget(QWidget):
             button.deleteLater()
         self.namespace_buttons.clear()
         
-        # TEMPORARY: Add mock data for testing (ALWAYS ADD FOR TESTING)
-        mock_namespaces = [
-            'AI', 'API', 'SOCIAL', 'TEST', 'NEW', 'WORK', 'PERSONAL', 'BANK', 
-            'EMAIL', 'CLOUD', 'DEV', 'PROD', 'STAGING', 'GAMING', 'SHOP',
-            'CRYPTO', 'FINANCE', 'HEALTH', 'TRAVEL', 'MUSIC', 'VIDEO', 'BOOKS',
-            'SERVER', 'DATABASE', 'MOBILE', 'WEB', 'DOCKER', 'AWS', 'AZURE',
-            'GCP', 'GITHUB', 'GITLAB', 'JENKINS', 'KUBERNETES', 'TERRAFORM',
-            'ANSIBLE', 'NGINX', 'APACHE', 'REDIS', 'MONGODB', 'POSTGRES',
-            'MYSQL', 'KAFKA', 'RABBIT', 'VPN', 'SSH', 'FTP', 'SFTP', 'S3'
-        ]
-        from ui_theme import CATPPUCCIN_COLORS
-        # Clear and repopulate with mock data
-        self.namespaces = []
-        self.namespace_colors = {}
-        for i, ns in enumerate(mock_namespaces):
-            self.namespaces.append(ns)
-            color_index = i % len(CATPPUCCIN_COLORS)
-            self.namespace_colors[ns] = CATPPUCCIN_COLORS[color_index]
-        
         # Add existing namespace tags
         for ns in self.namespaces:
             self._add_namespace_tag(ns, self.namespace_colors.get(ns, extra['primaryColor']))
@@ -287,6 +310,7 @@ class SecretCreateWidget(QWidget):
         tag_button = QPushButton(namespace)
         tag_button.setCheckable(True)
         tag_button.setFixedHeight(24)  # Fixed height for compact look
+        tag_button.setFocusPolicy(Qt.StrongFocus)  # Make focusable
         tag_button.setStyleSheet(
             f"QPushButton {{ "
             f"  padding: 2px 8px; "
@@ -305,6 +329,9 @@ class SecretCreateWidget(QWidget):
             f"QPushButton:checked {{ "
             f"  background-color: {color}; "
             f"  color: {extra['secondaryColor']}; "
+            f"}} "
+            f"QPushButton:focus {{ "
+            f"  border: 2px solid #89b4fa; "
             f"}}"
         )
         tag_button.clicked.connect(lambda: self._select_namespace(namespace, tag_button))
@@ -373,23 +400,31 @@ class SecretCreateWidget(QWidget):
     def _add_field_row(self, key, value, is_secret=False, key_editable=True):
         """Add a field row to the form"""
         row_container = QWidget()
+        row_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         row_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
         container_layout = QHBoxLayout(row_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(12)
+        row_container.setProperty('row_container', True)  # Mark as navigable
         
         # Key input
         if key_editable:
-            key_input = QLineEdit(key)
+            key_input = StyledLineEdit(key)
             key_input.setPlaceholderText("Field Name")
             key_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
             key_input.setFixedWidth(150)
             key_input.textChanged.connect(self._check_for_changes)
+            key_input.navigation.connect(self._handle_navigation)
+            key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
+            key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
         else:
-            key_input = QLineEdit(key)
-            key_input.setReadOnly(True)
+            key_input = StyledLineEdit(key)
+            key_input.set_editing(False)
             key_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); color: #a6adc8; } QLineEdit:focus { border: 2px solid #89b4fa; }")
             key_input.setFixedWidth(150)
+            key_input.navigation.connect(self._handle_navigation)
+            key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
+            key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
         
         container_layout.addWidget(key_input)
         
@@ -400,12 +435,15 @@ class SecretCreateWidget(QWidget):
         value_layout.setContentsMargins(0, 0, 0, 0)
         value_layout.setSpacing(8)
         
-        value_input = QLineEdit(value)
+        value_input = StyledLineEdit(value)
         value_input.setPlaceholderText("Field Value")
         value_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         if is_secret:
             value_input.setEchoMode(QLineEdit.Password)
         value_input.textChanged.connect(self._check_for_changes)
+        value_input.navigation.connect(self._handle_navigation)
+        value_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
+        value_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
         value_layout.addWidget(value_input, stretch=1)
         
         # Toggle visibility button
@@ -620,3 +658,139 @@ class SecretCreateWidget(QWidget):
         if namespace_resources is not None:
             self.namespace_resources = namespace_resources
         self._populate_namespace_tags()
+    
+    def _on_tags_focus_in(self):
+        """Highlight tags section on focus"""
+        self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")
+        self.current_focus_index = 0
+    
+    def _on_tags_focus_out(self):
+        """Remove highlight from tags section"""
+        self.tags_border_indicator.setStyleSheet("background-color: transparent;")
+    
+    def _on_resource_focus_in(self, event):
+        """Highlight resource input on focus"""
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+        self.current_focus_index = 1
+    
+    def _on_resource_focus_out(self, event):
+        """Remove highlight from resource input"""
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+    
+    def _on_field_focus_in(self, event, container):
+        """Highlight field row on focus"""
+        container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+        # Update current focus index
+        for i, row in enumerate(self.field_rows):
+            if row['container'] == container:
+                self.current_focus_index = i + 2  # +2 because 0 is tags, 1 is resource_input
+                break
+    
+    def _on_field_focus_out(self, event, container):
+        """Remove highlight from field row"""
+        container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+    
+    def _focus_element(self, index):
+        """Focus on element by index (0 = tags, 1 = resource_input, 2+ = field_rows)"""
+        if index == 0:
+            self.namespace_main_container.setFocus()
+            self._on_tags_focus_in()
+        elif index == 1:
+            self.resource_input.setFocus()
+        elif index >= 2:
+            row = self.field_rows[index - 2]
+            row['value_input'].setFocus()
+    
+    def _handle_navigation(self, event):
+        """Handle keyboard navigation"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        # Tab navigation within field (between key and value)
+        if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
+            if self.current_focus_index >= 2:  # We're in a field row
+                row_index = self.current_focus_index - 2
+                if row_index < len(self.field_rows):
+                    row = self.field_rows[row_index]
+                    focused = self.focusWidget()
+                    if focused == row['key_input']:
+                        row['value_input'].setFocus()
+                        return
+                    elif focused == row['value_input']:
+                        # Move to next element
+                        total_elements = 2 + len(self.field_rows)
+                        next_index = (self.current_focus_index + 1) % total_elements
+                        self._focus_element(next_index)
+                        return
+            # Default: move to next element
+            total_elements = 2 + len(self.field_rows)
+            next_index = (self.current_focus_index + 1) % total_elements
+            self._focus_element(next_index)
+            return
+        
+        # Navigation with arrows
+        if key == Qt.Key_Down:
+            total_elements = 2 + len(self.field_rows)  # tags + resource_input + field_rows
+            next_index = (self.current_focus_index + 1) % total_elements
+            self._focus_element(next_index)
+            return
+        
+        if key == Qt.Key_Up:
+            total_elements = 2 + len(self.field_rows)
+            next_index = (self.current_focus_index - 1) % total_elements
+            self._focus_element(next_index)
+            return
+        
+        # Hotkeys with Ctrl
+        if modifiers == Qt.ControlModifier:
+            if key == Qt.Key_N:
+                # Add new field
+                self._add_new_field()
+                return
+            elif key == Qt.Key_T:
+                # Add new namespace tag
+                self._add_new_namespace()
+                return
+            elif key == Qt.Key_S:
+                # Save
+                self._prompt_to_save()
+                return
+    
+    def _handle_tags_keypress(self, event):
+        """Handle keypresses in tags section"""
+        key = event.key()
+        modifiers = event.modifiers()
+        
+        checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
+        
+        if not checkable_buttons:
+            return
+        
+        # Tab - navigate between tags
+        if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
+            self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
+            checkable_buttons[self.current_tag_index].setFocus()
+            event.accept()
+            return
+        
+        # Space or Enter - select tag
+        if key in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+            if self.current_tag_index < len(checkable_buttons):
+                btn = checkable_buttons[self.current_tag_index]
+                btn.click()
+            event.accept()
+            return
+        
+        # Arrow Down/Up - exit tags section
+        if key == Qt.Key_Down:
+            self._on_tags_focus_out()
+            self._focus_element(1)  # Move to resource_input
+            event.accept()
+            return
+        
+        if key == Qt.Key_Up:
+            self._on_tags_focus_out()
+            total_elements = 2 + len(self.field_rows)
+            self._focus_element(total_elements - 1)  # Move to last field
+            event.accept()
+            return

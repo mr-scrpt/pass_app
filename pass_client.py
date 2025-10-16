@@ -156,8 +156,8 @@ class MainWindow(QMainWindow):
                 "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
             },
             "create": {
-                "nav": "<b>Navigate:</b> Tab &nbsp;&nbsp; <b>Back:</b> Esc",
-                "action": "<b>Add Field:</b> Click + Button &nbsp;&nbsp; <b>Save:</b> Ctrl+S"
+                "nav": "<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>Back:</b> Esc",
+                "action": "<b>Add Field:</b> Ctrl+N &nbsp;&nbsp; <b>Add Tag:</b> Ctrl+T &nbsp;&nbsp; <b>Save:</b> Ctrl+S"
             }
         }
         texts = help_texts.get(state, {"nav": "", "action": ""})
@@ -324,7 +324,9 @@ class MainWindow(QMainWindow):
         )
         self.update_help_text("create")
         self.stack.setCurrentIndex(2)
-        self.create_widget.resource_input.setFocus()
+        # Focus on tags section (first element)
+        self.create_widget.namespace_main_container.setFocus()
+        self.create_widget._on_tags_focus_in()
     
     def _show_search_view_from_create(self):
         self.load_data_and_populate()
