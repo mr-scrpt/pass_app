@@ -177,7 +177,14 @@ class SecretCreateWidget(QWidget):
         self.form_layout.setSpacing(15)
         self.form_layout.setContentsMargins(20, 10, 20, 20)
         
-        # Namespace cloud tags (compact, no label) with FlowLayout
+        # Namespace section: left (tags with scroll) + right (NEW button)
+        namespace_main_container = QWidget()
+        namespace_main_container.setMaximumHeight(84)  # Limit container height
+        namespace_main_layout = QHBoxLayout(namespace_main_container)
+        namespace_main_layout.setSpacing(10)
+        namespace_main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Left section: tags with FlowLayout and scroll
         self.tags_container = QWidget()
         self.tags_layout = FlowLayout(self.tags_container, spacing=6)
         self.tags_layout.setContentsMargins(0, 0, 0, 0)
@@ -186,12 +193,34 @@ class SecretCreateWidget(QWidget):
         tags_scroll = QScrollArea()
         tags_scroll.setWidgetResizable(True)
         tags_scroll.setFrameShape(QScrollArea.NoFrame)
-        tags_scroll.setMaximumHeight(84)
+        tags_scroll.setMinimumHeight(30)  # Minimum height for at least one row
+        tags_scroll.setMaximumHeight(84)  # Maximum height for 3 rows
         tags_scroll.setWidget(self.tags_container)
         tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
-        self.form_layout.addWidget(tags_scroll)
+        namespace_main_layout.addWidget(tags_scroll, stretch=1)  # Takes all available width
+        
+        # Right section: NEW button container
+        new_button_container = QWidget()
+        new_button_layout = QVBoxLayout(new_button_container)
+        new_button_layout.setContentsMargins(0, 0, 0, 0)
+        new_button_layout.setSpacing(0)
+        new_button_layout.setAlignment(Qt.AlignTop)
+        
+        self.new_namespace_button = QPushButton(" New")
+        self.new_namespace_button.setIcon(qta.icon('fa5s.plus-circle', color='#a6e3a1'))
+        self.new_namespace_button.setStyleSheet(
+            "QPushButton { border: none; padding: 4px 8px; color: #a6e3a1; font-size: 11px; font-weight: bold; } "
+            "QPushButton:hover { background-color: rgba(166, 227, 161, 0.1); }"
+        )
+        self.new_namespace_button.clicked.connect(self._add_new_namespace)
+        self.new_namespace_button.setCursor(Qt.PointingHandCursor)
+        
+        new_button_layout.addWidget(self.new_namespace_button)
+        namespace_main_layout.addWidget(new_button_container)  # Fixed width on the right
+        
+        self.form_layout.addWidget(namespace_main_container)
         
         # Resource name input (compact)
         self.resource_input = QLineEdit()
@@ -230,23 +259,25 @@ class SecretCreateWidget(QWidget):
             button.deleteLater()
         self.namespace_buttons.clear()
         
+        # TEMPORARY: Add mock data for testing (ALWAYS ADD FOR TESTING)
+        mock_namespaces = [
+            'AI', 'API', 'SOCIAL', 'TEST', 'NEW', 'WORK', 'PERSONAL', 'BANK', 
+            'EMAIL', 'CLOUD', 'DEV', 'PROD', 'STAGING', 'GAMING', 'SHOP',
+            'CRYPTO', 'FINANCE', 'HEALTH', 'TRAVEL', 'MUSIC', 'VIDEO', 'BOOKS',
+            'SERVER', 'DATABASE', 'MOBILE', 'WEB', 'DOCKER', 'AWS', 'AZURE'
+        ]
+        from ui_theme import CATPPUCCIN_COLORS
+        # Clear and repopulate with mock data
+        self.namespaces = []
+        self.namespace_colors = {}
+        for i, ns in enumerate(mock_namespaces):
+            self.namespaces.append(ns)
+            color_index = i % len(CATPPUCCIN_COLORS)
+            self.namespace_colors[ns] = CATPPUCCIN_COLORS[color_index]
+        
         # Add existing namespace tags
         for ns in self.namespaces:
             self._add_namespace_tag(ns, self.namespace_colors.get(ns, extra['primaryColor']))
-        
-        # Add the "new namespace" button (minimal style like ADD NEW FIELD)
-        add_ns_button = QPushButton(" New")
-        add_ns_button.setIcon(qta.icon('fa5s.plus-circle', color='#a6e3a1'))
-        add_ns_button.setStyleSheet(
-            "QPushButton { border: none; padding: 4px 8px; color: #a6e3a1; font-size: 11px; font-weight: bold; } "
-            "QPushButton:hover { background-color: rgba(166, 227, 161, 0.1); }"
-        )
-        add_ns_button.clicked.connect(self._add_new_namespace)
-        add_ns_button.setCursor(Qt.PointingHandCursor)
-        
-        # Add NEW button (FlowLayout will handle positioning)
-        self.tags_layout.addWidget(add_ns_button)
-        self.namespace_buttons.append(add_ns_button)
     
     def _add_namespace_tag(self, namespace, color):
         """Add a single namespace tag button"""
@@ -275,7 +306,7 @@ class SecretCreateWidget(QWidget):
         )
         tag_button.clicked.connect(lambda: self._select_namespace(namespace, tag_button))
         tag_button.setCursor(Qt.PointingHandCursor)
-        # Add to flow layout (NEW button will be added last)
+        # Add to flow layout
         self.tags_layout.addWidget(tag_button)
         self.namespace_buttons.append(tag_button)
     
