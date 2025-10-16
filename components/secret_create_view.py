@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QRect, QSize, QPoint
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QSizePolicy,
     QFrame,
+    QLayout,
 )
 from PySide6.QtGui import QColor
 import qtawesome as qta
@@ -21,10 +22,109 @@ from components.confirmation_dialog import ConfirmationDialog
 from ui_components import StyledLineEdit
 
 
+class FlowLayout(QLayout):
+    """Flow layout that wraps items to multiple rows"""
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super().__init__(parent)
+        self._item_list = []
+        self._h_spacing = spacing
+        self._v_spacing = spacing
+        self.setContentsMargins(margin, margin, margin, margin)
+
+    def addItem(self, item):
+        self._item_list.append(item)
+
+    def horizontalSpacing(self):
+        if self._h_spacing >= 0:
+            return self._h_spacing
+        return self.smartSpacing(QSizePolicy.PushButton, Qt.Horizontal)
+
+    def verticalSpacing(self):
+        if self._v_spacing >= 0:
+            return self._v_spacing
+        return self.smartSpacing(QSizePolicy.PushButton, Qt.Vertical)
+
+    def count(self):
+        return len(self._item_list)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list[index]
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list.pop(index)
+        return None
+
+    def expandingDirections(self):
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        height = self._do_layout(QRect(0, 0, width, 0), True)
+        return height
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._item_list:
+            size = size.expandedTo(item.minimumSize())
+        margin = self.contentsMargins()
+        size += QSize(margin.left() + margin.right(), margin.top() + margin.bottom())
+        return size
+
+    def _do_layout(self, rect, test_only):
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+        spacing_x = self.horizontalSpacing()
+        spacing_y = self.verticalSpacing()
+
+        for item in self._item_list:
+            widget = item.widget()
+            space_x = spacing_x + widget.style().layoutSpacing(
+                QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal
+            )
+            space_y = spacing_y + widget.style().layoutSpacing(
+                QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical
+            )
+            next_x = x + item.sizeHint().width() + space_x
+            if next_x - space_x > rect.right() and line_height > 0:
+                x = rect.x()
+                y = y + line_height + space_y
+                next_x = x + item.sizeHint().width() + space_x
+                line_height = 0
+
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+
+            x = next_x
+            line_height = max(line_height, item.sizeHint().height())
+
+        return y + line_height - rect.y()
+
+    def smartSpacing(self, pm, orientation):
+        parent = self.parent()
+        if not parent:
+            return -1
+        if parent.isWidgetType():
+            return parent.style().pixelMetric(pm, None, parent)
+        return parent.spacing()
+
+
 class SecretCreateWidget(QWidget):
     state_changed = Signal(str)  # Emits the name of the new state
 
-    def __init__(self, back_callback, save_callback, show_status_callback, namespace_colors=None, namespaces=None):
+    def __init__(self, back_callback, save_callback, show_status_callback, namespace_colors=None, namespaces=None, namespace_resources=None):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
@@ -33,6 +133,7 @@ class SecretCreateWidget(QWidget):
         self.is_dirty = False
         self.namespace_colors = namespace_colors or {}
         self.namespaces = namespaces or []
+        self.namespace_resources = namespace_resources or {}  # {namespace: [resource1, resource2, ...]}
         self.selected_namespace = None
         self.namespace_buttons = []
         
@@ -76,21 +177,19 @@ class SecretCreateWidget(QWidget):
         self.form_layout.setSpacing(15)
         self.form_layout.setContentsMargins(20, 10, 20, 20)
         
-        # Namespace cloud tags (compact, no label)
+        # Namespace cloud tags (compact, no label) with FlowLayout
         self.tags_container = QWidget()
-        self.tags_layout = QHBoxLayout(self.tags_container)
-        self.tags_layout.setSpacing(6)
+        self.tags_layout = FlowLayout(self.tags_container, spacing=6)
         self.tags_layout.setContentsMargins(0, 0, 0, 0)
-        # No alignment set - will use spacer to push NEW button to right
         
-        # Scroll area for tags
+        # Scroll area for tags (up to 3 rows: 24px * 3 + spacing * 2 = ~84px)
         tags_scroll = QScrollArea()
         tags_scroll.setWidgetResizable(True)
         tags_scroll.setFrameShape(QScrollArea.NoFrame)
-        tags_scroll.setMaximumHeight(50)
+        tags_scroll.setMaximumHeight(84)
         tags_scroll.setWidget(self.tags_container)
-        tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         self.form_layout.addWidget(tags_scroll)
         
@@ -145,8 +244,7 @@ class SecretCreateWidget(QWidget):
         add_ns_button.clicked.connect(self._add_new_namespace)
         add_ns_button.setCursor(Qt.PointingHandCursor)
         
-        # Add stretch before the NEW button to push it to the right
-        self.tags_layout.addStretch()
+        # Add NEW button (FlowLayout will handle positioning)
         self.tags_layout.addWidget(add_ns_button)
         self.namespace_buttons.append(add_ns_button)
     
@@ -177,9 +275,8 @@ class SecretCreateWidget(QWidget):
         )
         tag_button.clicked.connect(lambda: self._select_namespace(namespace, tag_button))
         tag_button.setCursor(Qt.PointingHandCursor)
-        # Insert before the stretch spacer (which is always second-to-last)
-        insert_pos = self.tags_layout.count() - 2 if self.tags_layout.count() > 1 else 0
-        self.tags_layout.insertWidget(insert_pos, tag_button)
+        # Add to flow layout (NEW button will be added last)
+        self.tags_layout.addWidget(tag_button)
         self.namespace_buttons.append(tag_button)
     
     def _hex_to_rgb(self, hex_color):
@@ -412,6 +509,14 @@ class SecretCreateWidget(QWidget):
                     row['key_input'].setFocus()
                     return
         
+        # Check if resource already exists in this namespace
+        if namespace in self.namespace_resources:
+            if resource in self.namespace_resources[namespace]:
+                self.show_status(f"Resource '{resource}' already exists in namespace '{namespace}'.", "error")
+                self.resource_input.setFocus()
+                self.resource_input.selectAll()
+                return
+        
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText(f"Create secret '[{namespace}] {resource}'?")
         if dialog.exec() == QDialog.Accepted:
@@ -474,8 +579,10 @@ class SecretCreateWidget(QWidget):
         self.is_dirty = False
         self.resource_input.setFocus()
     
-    def update_namespaces(self, namespaces, namespace_colors):
-        """Update the list of namespaces"""
+    def update_namespaces(self, namespaces, namespace_colors, namespace_resources=None):
+        """Update the list of namespaces and their resources"""
         self.namespaces = namespaces
         self.namespace_colors = namespace_colors
+        if namespace_resources is not None:
+            self.namespace_resources = namespace_resources
         self._populate_namespace_tags()

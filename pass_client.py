@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.all_secrets = []
         self.namespace_colors = {}
+        self.namespace_resources = {}  # {namespace: [resource1, resource2, ...]}
         self.current_selected_item = None
         self.setWindowTitle("Pass Suite")
         self.resize(800, 600)
@@ -99,7 +100,8 @@ class MainWindow(QMainWindow):
             save_callback=self._save_secret,
             show_status_callback=self.status_bar.show_status,
             namespace_colors=self.namespace_colors,
-            namespaces=list(self.namespace_colors.keys())
+            namespaces=list(self.namespace_colors.keys()),
+            namespace_resources=self.namespace_resources
         )
         self.create_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.create_widget)
@@ -208,6 +210,7 @@ class MainWindow(QMainWindow):
             self.results_list.addItem("Error: Could not load secrets.")
             return
         self.all_secrets = []
+        self.namespace_resources = {}  # Reset namespace resources
         namespaces_seen = []
         
         for ns_item in backend_data:
@@ -219,7 +222,11 @@ class MainWindow(QMainWindow):
                 color_index = namespaces_seen.index(namespace) % len(CATPPUCCIN_COLORS)
                 self.namespace_colors[namespace] = CATPPUCCIN_COLORS[color_index]
             
-            for resource_name in ns_item.get("resources", []):
+            # Build namespace_resources dictionary
+            resources = ns_item.get("resources", [])
+            self.namespace_resources[namespace] = resources
+            
+            for resource_name in resources:
                 plain_text = f"[{namespace}]: {resource_name}"
                 item_data = {"namespace": namespace, "resource": resource_name}
                 self.all_secrets.append((plain_text, item_data))
@@ -309,10 +316,11 @@ class MainWindow(QMainWindow):
             self.details_widget._focus_field(0)
     
     def _show_create_view(self):
-        # Update namespaces before showing
+        # Update namespaces and resources before showing
         self.create_widget.update_namespaces(
             list(self.namespace_colors.keys()),
-            self.namespace_colors
+            self.namespace_colors,
+            self.namespace_resources
         )
         self.update_help_text("create")
         self.stack.setCurrentIndex(2)
