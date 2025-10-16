@@ -108,8 +108,8 @@ class MainWindow(QMainWindow):
         self.status_bar = StatusBarWidget()
         main_layout.addWidget(self.status_bar)
 
-        self.nav_help_widget = HotkeyHelpWidget()
-        self.action_help_widget = HotkeyHelpWidget()
+        self.nav_help_widget = HotkeyHelpWidget(category="Navigation")
+        self.action_help_widget = HotkeyHelpWidget(category="Actions")
         main_layout.addWidget(self.nav_help_widget)
         main_layout.addWidget(self.action_help_widget)
 
@@ -233,33 +233,68 @@ class MainWindow(QMainWindow):
     def update_help_text(self, state):
         help_texts = {
             "search": {
-                "nav": "<b>Navigate:</b> ↑/↓",
-                "action": "<b>View:</b> Enter &nbsp;&nbsp; <b>Create New:</b> Ctrl+N &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G"
+                "category_nav": "Navigation",
+                "nav": "Up/Down - Navigate  |  Enter - View",
+                "category_action": "Actions",
+                "action": "Ctrl+N - Create  |  Ctrl+R - Sync  |  Ctrl+G - Generate password  |  Ctrl+Shift+G - Advanced"
             },
             "normal": {
-                "nav": "<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Back:</b> Esc",
-                "action": "<b>Copy:</b> Enter &nbsp;<b>Edit:</b> Ctrl+E &nbsp;<b>Deep Edit:</b> Ctrl+Shift+E &nbsp;<b>New Field:</b> Ctrl+N &nbsp;<b>Save:</b> Ctrl+S"
+                "category_nav": "Navigation",
+                "nav": "Up/Down - Fields  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
+                "category_action": "Actions",
+                "action": "Enter - Copy  |  Ctrl+E - Edit  |  Ctrl+Shift+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save"
             },
             "edit": {
-                "nav": "",
-                "action": "<b>Cancel Edit:</b> Esc"
+                "category_nav": "Navigation",
+                "nav": "Focus locked",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Tab - Navigate"
             },
             "deep_edit": {
-                "nav": "<b>Navigate:</b> Tab",
-                "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Delete:</b> Ctrl+D &nbsp;&nbsp; <b>Cancel:</b> Esc"
+                "category_nav": "Navigation",
+                "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Ctrl+D - Delete  |  Esc - Cancel"
             },
             "add_new": {
-                "nav": "<b>Navigate:</b> Tab",
-                "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
+                "category_nav": "Navigation",
+                "nav": "Tab - Switch fields  |  Shift+Tab - Backward",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+N - Add Another"
             },
             "create": {
-                "nav": "<b>Navigate:</b> ↑/↓ &nbsp;&nbsp; <b>Back:</b> Esc",
-                "action": "<b>Add Field:</b> Ctrl+N &nbsp;&nbsp; <b>Add Tag:</b> Ctrl+T &nbsp;&nbsp; <b>Save:</b> Ctrl+S"
+                "category_nav": "Navigation",
+                "nav": "Up/Down - Sections  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
+                "category_action": "Actions",
+                "action": "Enter - Activate  |  Ctrl+E - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate"
+            },
+            "create_tags": {
+                "category_nav": "Navigation",
+                "nav": "Up/Down - Navigate tags  |  Tab - Next tag  |  Shift+Tab - Previous  |  Esc - Exit tags",
+                "category_action": "Actions",
+                "action": "Enter - Select/deselect tag  |  Space - Toggle  |  Ctrl+T - Add new namespace"
+            },
+            "create_editing": {
+                "category_nav": "Navigation",
+                "nav": "Focus locked on editing field  |  Tab - Navigate within input",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+G - Generate (if password)"
+            },
+            "create_new_field": {
+                "category_nav": "Navigation",
+                "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
+                "category_action": "Actions",
+                "action": "Enter - Confirm field  |  Esc - Delete empty  |  Ctrl+N - Add another"
             }
         }
-        texts = help_texts.get(state, {"nav": "", "action": ""})
-        self.nav_help_widget.setText(texts['nav'])
-        self.action_help_widget.setText(texts['action'])
+        texts = help_texts.get(state, {
+            "category_nav": "Navigation", 
+            "nav": "", 
+            "category_action": "Actions", 
+            "action": ""
+        })
+        self.nav_help_widget.update_content(texts['category_nav'], texts['nav'])
+        self.action_help_widget.update_content(texts['category_action'], texts['action'])
 
     def handle_simple_generate(self, event):
         password = generate_password()

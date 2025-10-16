@@ -606,6 +606,8 @@ class SecretCreateWidget(QWidget):
             self.field_rows.remove(row_data)
             row_data['container'].deleteLater()
             self._check_for_changes()
+            # Emit state change back to normal create mode
+            self.state_changed.emit("create")
     
     def _highlight_field_error(self, row, field_type):
         """Highlight a field with red border to indicate error"""
@@ -628,6 +630,9 @@ class SecretCreateWidget(QWidget):
     
     def _focus_after_delete(self, deleted_index):
         """Restore focus after deleting a field"""
+        # Emit state change back to normal create mode
+        self.state_changed.emit("create")
+        
         # If there are still fields, focus on the previous one
         if self.field_rows:
             # Try to focus on the field at the same index (or previous if last was deleted)
@@ -850,12 +855,16 @@ class SecretCreateWidget(QWidget):
         if checkable_buttons:
             self.current_tag_index = 0
             self._update_tag_highlights()
+        # Emit state change
+        self.state_changed.emit("create_tags")
     
     def _exit_tags_interaction_mode(self):
         """Exit interaction mode for tags"""
         self.tags_interaction_mode = False
         self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")  # Blue for navigation
         self._update_tag_highlights()
+        # Emit state change back to normal create mode
+        self.state_changed.emit("create")
     
     def _update_tag_highlights(self):
         """Update visual highlights for tags based on state"""
@@ -936,9 +945,27 @@ class SecretCreateWidget(QWidget):
         if is_editing:
             # Yellow border for editing mode
             container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
+            
+            # Check if this is a new field (editable key with empty values)
+            is_new_field = False
+            for row in self.field_rows:
+                if row['container'] == container and row['key_editable']:
+                    key = row['key_input'].text().strip()
+                    value = row['value_input'].text().strip()
+                    if not key and not value:
+                        is_new_field = True
+                        break
+            
+            # Emit appropriate state
+            if is_new_field:
+                self.state_changed.emit("create_new_field")
+            else:
+                self.state_changed.emit("create_editing")
         else:
             # Blue border for navigation mode
             container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+            # Return to normal create mode
+            self.state_changed.emit("create")
     
     def _focus_element(self, index):
         """Focus on element by index (0 = tags, 1 = resource_input, 2+ = field_rows)"""

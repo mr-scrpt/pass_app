@@ -593,6 +593,13 @@ class SecretDetailWidget(QWidget):
         line_edit.setFocus()
         self.state_changed.emit("edit")
         self.show_status("Editing enabled", "info")
+        
+        # Set callback to emit state change when editing ends
+        def on_editing_changed(is_editing):
+            if not is_editing:
+                self.state_changed.emit("normal")
+        
+        line_edit.editing_changed = on_editing_changed
 
     def _cancel_editing(self, line_edit):
         for row in self.field_rows:
