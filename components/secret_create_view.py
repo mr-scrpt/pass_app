@@ -179,7 +179,7 @@ class SecretCreateWidget(QWidget):
         
         # Namespace section: left (tags with scroll) + right (NEW button)
         namespace_main_container = QWidget()
-        namespace_main_container.setMaximumHeight(84)  # Limit container height
+        namespace_main_container.setMaximumHeight(150)  # Limit container height for 3 rows
         namespace_main_layout = QHBoxLayout(namespace_main_container)
         namespace_main_layout.setSpacing(10)
         namespace_main_layout.setContentsMargins(0, 0, 0, 0)
@@ -189,12 +189,12 @@ class SecretCreateWidget(QWidget):
         self.tags_layout = FlowLayout(self.tags_container, spacing=6)
         self.tags_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Scroll area for tags (up to 3 rows: 24px * 3 + spacing * 2 = ~84px)
+        # Scroll area for tags (up to 3 rows)
         tags_scroll = QScrollArea()
         tags_scroll.setWidgetResizable(True)
         tags_scroll.setFrameShape(QScrollArea.NoFrame)
         tags_scroll.setMinimumHeight(30)  # Minimum height for at least one row
-        tags_scroll.setMaximumHeight(84)  # Maximum height for 3 rows
+        tags_scroll.setMaximumHeight(150)  # Maximum height for 3 rows
         tags_scroll.setWidget(self.tags_container)
         tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -264,7 +264,10 @@ class SecretCreateWidget(QWidget):
             'AI', 'API', 'SOCIAL', 'TEST', 'NEW', 'WORK', 'PERSONAL', 'BANK', 
             'EMAIL', 'CLOUD', 'DEV', 'PROD', 'STAGING', 'GAMING', 'SHOP',
             'CRYPTO', 'FINANCE', 'HEALTH', 'TRAVEL', 'MUSIC', 'VIDEO', 'BOOKS',
-            'SERVER', 'DATABASE', 'MOBILE', 'WEB', 'DOCKER', 'AWS', 'AZURE'
+            'SERVER', 'DATABASE', 'MOBILE', 'WEB', 'DOCKER', 'AWS', 'AZURE',
+            'GCP', 'GITHUB', 'GITLAB', 'JENKINS', 'KUBERNETES', 'TERRAFORM',
+            'ANSIBLE', 'NGINX', 'APACHE', 'REDIS', 'MONGODB', 'POSTGRES',
+            'MYSQL', 'KAFKA', 'RABBIT', 'VPN', 'SSH', 'FTP', 'SFTP', 'S3'
         ]
         from ui_theme import CATPPUCCIN_COLORS
         # Clear and repopulate with mock data
