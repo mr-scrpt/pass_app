@@ -140,6 +140,7 @@ class SecretCreateWidget(QWidget):
         self.namespace_buttons = []
         self.current_focus_index = 0  # Track current focused element (0 = tags, 1 = resource_input, 2+ = field_rows)
         self.current_tag_index = 0  # Track current focused tag
+        self.tags_interaction_mode = False  # Track if in tags interaction mode
         
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setSpacing(0)
@@ -269,6 +270,8 @@ class SecretCreateWidget(QWidget):
         self.resource_input.navigation.connect(self._handle_navigation)
         self.resource_input.focusInEvent = lambda e: self._on_resource_focus_in(e)
         self.resource_input.focusOutEvent = lambda e: self._on_resource_focus_out(e)
+        # Track editing state changes
+        self.resource_input.editing_changed = lambda is_editing: self._on_editing_state_changed(self.resource_input_container, is_editing)
         resource_input_layout.addWidget(self.resource_input)
         
         self.form_layout.addWidget(self.resource_input_container)
@@ -349,14 +352,23 @@ class SecretCreateWidget(QWidget):
         return f"{r}, {g}, {b}"
     
     def _select_namespace(self, namespace, button):
-        """Select a namespace from the cloud"""
+        """Select a namespace"""
         # Uncheck all other buttons
         for btn in self.namespace_buttons:
             if btn != button and btn.isCheckable():
                 btn.setChecked(False)
         
-        self.selected_namespace = namespace
+        # Toggle the clicked button
+        button.setChecked(not button.isChecked())
+        
+        # Update selected namespace
+        if button.isChecked():
+            self.selected_namespace = namespace
+        else:
+            self.selected_namespace = None
+        
         self._check_for_changes()
+        self._update_tag_highlights()  # Update visual state after selection
     
     def _add_new_namespace(self):
         """Add a new namespace"""
@@ -419,6 +431,8 @@ class SecretCreateWidget(QWidget):
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
+            # Track editing state changes
+            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         else:
             key_input = StyledLineEdit(key)
             key_input.set_editing(False)
@@ -427,6 +441,8 @@ class SecretCreateWidget(QWidget):
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
+            # Track editing state changes (even for non-editable)
+            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         
         container_layout.addWidget(key_input)
         
@@ -446,6 +462,8 @@ class SecretCreateWidget(QWidget):
         value_input.navigation.connect(self._handle_navigation)
         value_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
         value_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
+        # Track editing state changes
+        value_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         value_layout.addWidget(value_input, stretch=1)
         
         # Toggle visibility button
@@ -672,13 +690,81 @@ class SecretCreateWidget(QWidget):
         self._populate_namespace_tags()
     
     def _on_tags_focus_in(self):
-        """Highlight tags section on focus"""
-        self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")
+        """Highlight tags section on focus (blue for navigation)"""
+        self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")  # Blue for navigation
         self.current_focus_index = 0
+        self.tags_interaction_mode = False
+        self._update_tag_highlights()
     
     def _on_tags_focus_out(self):
         """Remove highlight from tags section"""
         self.tags_border_indicator.setStyleSheet("background-color: transparent;")
+        self.tags_interaction_mode = False
+        self._update_tag_highlights()
+    
+    def _enter_tags_interaction_mode(self):
+        """Enter interaction mode for tags"""
+        self.tags_interaction_mode = True
+        self.tags_border_indicator.setStyleSheet("background-color: #f9e2af;")  # Yellow for interaction
+        # Focus on first tag if available
+        checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
+        if checkable_buttons:
+            self.current_tag_index = 0
+            self._update_tag_highlights()
+    
+    def _exit_tags_interaction_mode(self):
+        """Exit interaction mode for tags"""
+        self.tags_interaction_mode = False
+        self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")  # Blue for navigation
+        self._update_tag_highlights()
+    
+    def _update_tag_highlights(self):
+        """Update visual highlights for tags based on state"""
+        checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
+        
+        for i, btn in enumerate(checkable_buttons):
+            namespace = btn.text()
+            color = self.namespace_colors.get(namespace, extra['primaryColor'])
+            rgb = self._hex_to_rgb(color)
+            
+            # Selected tag styling
+            if btn.isChecked():
+                base_style = f"background-color: {color}; color: {extra['secondaryColor']};"
+            else:
+                base_style = f"background-color: rgba({rgb}, 0.2); color: {color};"
+            
+            # Active tag in interaction mode - add glow/opacity
+            if self.tags_interaction_mode and i == self.current_tag_index:
+                # Active tag gets a bright border and slightly higher opacity
+                btn.setStyleSheet(
+                    f"QPushButton {{ "
+                    f"  padding: 2px 8px; "
+                    f"  border: 2px solid #f9e2af; "
+                    f"  border-radius: 12px; "
+                    f"  {base_style} "
+                    f"  font-size: 11px; "
+                    f"  font-weight: bold; "
+                    f"  min-height: 0px; "
+                    f"  max-height: 24px; "
+                    f"}} "
+                )
+            else:
+                # Normal styling
+                btn.setStyleSheet(
+                    f"QPushButton {{ "
+                    f"  padding: 2px 8px; "
+                    f"  border: 1px solid {color}; "
+                    f"  border-radius: 12px; "
+                    f"  {base_style} "
+                    f"  font-size: 11px; "
+                    f"  font-weight: bold; "
+                    f"  min-height: 0px; "
+                    f"  max-height: 24px; "
+                    f"}} "
+                    f"QPushButton:hover {{ "
+                    f"  background-color: rgba({rgb}, 0.3); "
+                    f"}} "
+                )
     
     def _on_resource_focus_in(self, event):
         """Highlight resource input on focus"""
@@ -701,6 +787,21 @@ class SecretCreateWidget(QWidget):
     def _on_field_focus_out(self, event, container):
         """Remove highlight from field row"""
         container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+    
+    def _on_editing_state_changed(self, container, is_editing):
+        """Change border color based on editing state"""
+        if is_editing:
+            # Yellow border for editing mode
+            if container == self.resource_input_container:
+                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+            else:
+                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
+        else:
+            # Blue border for navigation mode
+            if container == self.resource_input_container:
+                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+            else:
+                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
     
     def _focus_element(self, index):
         """Focus on element by index (0 = tags, 1 = resource_input, 2+ = field_rows)"""
@@ -786,42 +887,71 @@ class SecretCreateWidget(QWidget):
         key = event.key()
         modifiers = event.modifiers()
         
-        # Esc - go back (with confirmation if dirty)
-        if key == Qt.Key_Escape:
-            self._handle_back()
-            event.accept()
-            return
-        
         checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
         
-        if not checkable_buttons:
-            return
+        # Navigation mode (not in interaction)
+        if not self.tags_interaction_mode:
+            # Enter - enter interaction mode
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                self._enter_tags_interaction_mode()
+                event.accept()
+                return
+            
+            # Esc - go back (with confirmation if dirty)
+            if key == Qt.Key_Escape:
+                self._handle_back()
+                event.accept()
+                return
+            
+            # Arrow Down/Up - exit tags section
+            if key == Qt.Key_Down:
+                self._on_tags_focus_out()
+                self._focus_element(1)  # Move to resource_input
+                event.accept()
+                return
+            
+            if key == Qt.Key_Up:
+                self._on_tags_focus_out()
+                total_elements = 2 + len(self.field_rows)
+                self._focus_element(total_elements - 1)  # Move to last field
+                event.accept()
+                return
         
-        # Tab - navigate between tags
-        if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
-            self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
-            checkable_buttons[self.current_tag_index].setFocus()
-            event.accept()
-            return
-        
-        # Space or Enter - select tag
-        if key in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
-            if self.current_tag_index < len(checkable_buttons):
-                btn = checkable_buttons[self.current_tag_index]
-                btn.click()
-            event.accept()
-            return
-        
-        # Arrow Down/Up - exit tags section
-        if key == Qt.Key_Down:
-            self._on_tags_focus_out()
-            self._focus_element(1)  # Move to resource_input
-            event.accept()
-            return
-        
-        if key == Qt.Key_Up:
-            self._on_tags_focus_out()
-            total_elements = 2 + len(self.field_rows)
-            self._focus_element(total_elements - 1)  # Move to last field
-            event.accept()
-            return
+        # Interaction mode
+        else:
+            if not checkable_buttons:
+                return
+            
+            # Esc - exit interaction mode
+            if key == Qt.Key_Escape:
+                self._exit_tags_interaction_mode()
+                event.accept()
+                return
+            
+            # Arrow Left/Right - navigate between tags
+            if key == Qt.Key_Left:
+                self.current_tag_index = (self.current_tag_index - 1) % len(checkable_buttons)
+                self._update_tag_highlights()
+                event.accept()
+                return
+            
+            if key == Qt.Key_Right:
+                self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
+                self._update_tag_highlights()
+                event.accept()
+                return
+            
+            # Tab - navigate between tags (same as Right)
+            if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
+                self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
+                self._update_tag_highlights()
+                event.accept()
+                return
+            
+            # Space or Enter - select tag
+            if key in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+                if self.current_tag_index < len(checkable_buttons):
+                    btn = checkable_buttons[self.current_tag_index]
+                    btn.click()
+                event.accept()
+                return

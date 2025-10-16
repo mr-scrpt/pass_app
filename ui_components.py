@@ -26,10 +26,14 @@ class StyledLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._is_editing = False
+        self.editing_changed = None  # Callback for editing state changes
 
     def set_editing(self, is_editing):
         self._is_editing = is_editing
         self.setReadOnly(not is_editing)
+        # Notify about editing state change
+        if self.editing_changed:
+            self.editing_changed(is_editing)
 
     def keyPressEvent(self, event):
         if self._is_editing:
