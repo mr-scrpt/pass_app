@@ -128,6 +128,8 @@ class SecretDetailWidget(QWidget):
         key_le.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         key_le.textChanged.connect(self._check_for_changes)
         key_le.navigation.connect(self._handle_navigation)
+        # Track editing state changes for deep edit mode
+        key_le.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         
         label_stack.addWidget(label)
         label_stack.addWidget(key_le)
@@ -150,6 +152,8 @@ class SecretDetailWidget(QWidget):
         line_edit.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
         line_edit.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
         line_edit.textChanged.connect(self._check_for_changes)
+        # Track editing state changes
+        line_edit.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         value_layout.addWidget(line_edit, stretch=1)
         
         toggle_button = QPushButton()
@@ -208,17 +212,30 @@ class SecretDetailWidget(QWidget):
         remove_button.setToolTip("Remove this field")
         remove_button.setFixedSize(36, 36)
 
+        # Container with border for highlighting
+        new_row_container = QWidget()
+        new_row_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
+        new_row_layout = QHBoxLayout(new_row_container)
+        new_row_layout.setContentsMargins(0, 0, 0, 0)
+        new_row_layout.setSpacing(8)
+        
         new_row_widget = QWidget()
         layout = QHBoxLayout(new_row_widget)
         layout.setContentsMargins(0,0,0,0)
         layout.addWidget(key_edit)
         layout.addWidget(value_edit)
         layout.addWidget(remove_button)
+        
+        new_row_layout.addWidget(new_row_widget)
 
-        row_data = {'widget': new_row_widget, 'key_le': key_edit, 'val_le': value_edit}
+        row_data = {'widget': new_row_widget, 'key_le': key_edit, 'val_le': value_edit, 'container': new_row_container}
         remove_button.clicked.connect(lambda: self._remove_new_field_row(row_data))
         
-        self.form_layout.insertRow(self.form_layout.rowCount() - 1, new_row_widget)
+        # Track editing state changes
+        key_edit.editing_changed = lambda is_editing, c=new_row_container: self._on_editing_state_changed(c, is_editing)
+        value_edit.editing_changed = lambda is_editing, c=new_row_container: self._on_editing_state_changed(c, is_editing)
+        
+        self.form_layout.insertRow(self.form_layout.rowCount() - 1, new_row_container)
         self.new_rows.append(row_data)
         self._check_for_changes()
         key_edit.setFocus()
@@ -227,7 +244,11 @@ class SecretDetailWidget(QWidget):
     def _remove_new_field_row(self, row_data):
         if row_data in self.new_rows:
             self.new_rows.remove(row_data)
-            row_data['widget'].deleteLater()
+            # Delete container (which contains the widget)
+            if 'container' in row_data:
+                row_data['container'].deleteLater()
+            else:
+                row_data['widget'].deleteLater()
             self._check_for_changes()
             self.state_changed.emit("normal")
 
@@ -490,6 +511,15 @@ class SecretDetailWidget(QWidget):
             else:
                 line_edit.set_editing(False)
                 self.show_status("")
+    
+    def _on_editing_state_changed(self, container, is_editing):
+        """Change border color based on editing state"""
+        if is_editing:
+            # Yellow border for editing mode
+            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
+        else:
+            # Blue border for navigation mode
+            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
