@@ -40,6 +40,8 @@ class HotkeyCheatsheetDialog(QDialog):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Type to filter shortcuts...")
         self.search_input.textChanged.connect(self._filter_shortcuts)
+        # Install event filter to handle Up/Down in search
+        self.search_input.installEventFilter(self)
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.search_input)
         layout.addLayout(search_layout)
@@ -51,7 +53,7 @@ class HotkeyCheatsheetDialog(QDialog):
         
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setSpacing(20)
+        self.content_layout.setSpacing(10)  # Reduced spacing between items
         
         # Build hotkey sections
         self._build_hotkey_sections()
@@ -236,7 +238,7 @@ class HotkeyCheatsheetDialog(QDialog):
         for hotkey, description in items:
             item_widget = QWidget()
             item_layout = QHBoxLayout(item_widget)
-            item_layout.setContentsMargins(20, 5, 10, 5)
+            item_layout.setContentsMargins(20, 2, 10, 2)  # Reduced vertical margins
             item_layout.setSpacing(15)
             
             # Hotkey label (light background with dark text)
@@ -276,6 +278,32 @@ class HotkeyCheatsheetDialog(QDialog):
                           not filter_text)
                 widget.setVisible(visible)
     
+    def eventFilter(self, obj, event):
+        """Filter events to handle Up/Down keys"""
+        from PySide6.QtCore import QEvent
+        
+        # If search input and key press event
+        if obj == self.search_input and event.type() == QEvent.KeyPress:
+            key = event.key()
+            # Intercept Up/Down to scroll instead
+            if key in (Qt.Key_Up, Qt.Key_Down):
+                self._scroll_content(key)
+                return True  # Event handled
+        
+        return super().eventFilter(obj, event)
+    
+    def _scroll_content(self, key):
+        """Scroll the content area"""
+        scrollbar = self.scroll.verticalScrollBar()
+        step = 50  # Scroll step in pixels
+        
+        if key == Qt.Key_Up:
+            new_value = max(scrollbar.minimum(), scrollbar.value() - step)
+            scrollbar.setValue(new_value)
+        elif key == Qt.Key_Down:
+            new_value = min(scrollbar.maximum(), scrollbar.value() + step)
+            scrollbar.setValue(new_value)
+    
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key events"""
         key = event.key()
@@ -283,19 +311,11 @@ class HotkeyCheatsheetDialog(QDialog):
         # Escape - close dialog
         if key == Qt.Key_Escape:
             self.accept()
-            event.accept()
             return
         
-        # Up/Down - scroll content (if search not focused)
+        # Up/Down - scroll content
         if key in (Qt.Key_Up, Qt.Key_Down):
-            if not self.search_input.hasFocus():
-                scrollbar = self.scroll.verticalScrollBar()
-                step = 50  # Scroll step in pixels
-                if key == Qt.Key_Up:
-                    scrollbar.setValue(scrollbar.value() - step)
-                else:
-                    scrollbar.setValue(scrollbar.value() + step)
-                event.accept()
-                return
+            self._scroll_content(key)
+            return
         
         super().keyPressEvent(event)
