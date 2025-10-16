@@ -116,10 +116,91 @@ def delete_secret():
     except Exception as e:
         handle_error(e)
 
+def git_push():
+    """Push local changes to remote git repository."""
+    try:
+        result = subprocess.run(["pass", "git", "push"], capture_output=True, text=True, check=True)
+        output = result.stdout.strip() + result.stderr.strip()
+        print(json.dumps({"status": "success", "message": "Successfully pushed to remote.", "output": output}, indent=2))
+    except subprocess.CalledProcessError as e:
+        # Check if it's just "Everything up-to-date"
+        if "up-to-date" in e.stderr.lower() or "up-to-date" in e.stdout.lower():
+            print(json.dumps({"status": "success", "message": "Already up to date.", "output": e.stderr + e.stdout}, indent=2))
+        else:
+            handle_error(e)
+    except Exception as e:
+        handle_error(e)
+
+def git_pull():
+    """Pull changes from remote git repository."""
+    try:
+        result = subprocess.run(["pass", "git", "pull", "--rebase"], capture_output=True, text=True, check=True)
+        output = result.stdout.strip() + result.stderr.strip()
+        print(json.dumps({"status": "success", "message": "Successfully pulled from remote.", "output": output}, indent=2))
+    except subprocess.CalledProcessError as e:
+        # Check if it's just "Already up to date"
+        if "up to date" in e.stderr.lower() or "up to date" in e.stdout.lower():
+            print(json.dumps({"status": "success", "message": "Already up to date.", "output": e.stderr + e.stdout}, indent=2))
+        else:
+            handle_error(e)
+    except Exception as e:
+        handle_error(e)
+
+def git_status():
+    """Check git status of password store."""
+    try:
+        # Check if there are uncommitted changes
+        result = subprocess.run(["pass", "git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+        has_local_changes = bool(result.stdout.strip())
+        
+        # Check if local is ahead/behind remote
+        fetch_result = subprocess.run(["pass", "git", "fetch"], capture_output=True, text=True)
+        rev_list_result = subprocess.run(
+            ["pass", "git", "rev-list", "--left-right", "--count", "HEAD...@{u}"],
+            capture_output=True, text=True
+        )
+        
+        ahead = 0
+        behind = 0
+        has_remote = True
+        
+        if rev_list_result.returncode == 0:
+            counts = rev_list_result.stdout.strip().split()
+            if len(counts) == 2:
+                ahead = int(counts[0])
+                behind = int(counts[1])
+        else:
+            # No remote configured or can't reach it
+            has_remote = False
+        
+        status_info = {
+            "status": "success",
+            "has_local_changes": has_local_changes,
+            "ahead": ahead,
+            "behind": behind,
+            "has_remote": has_remote,
+            "needs_push": ahead > 0 or has_local_changes,
+            "needs_pull": behind > 0
+        }
+        
+        print(json.dumps(status_info, indent=2))
+    except Exception as e:
+        # If git is not configured, return a neutral status
+        print(json.dumps({
+            "status": "success",
+            "has_local_changes": False,
+            "ahead": 0,
+            "behind": 0,
+            "has_remote": False,
+            "needs_push": False,
+            "needs_pull": False,
+            "error": str(e)
+        }, indent=2))
+
 def main():
     """Main command router."""
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} [list|show|create|edit|delete]", file=sys.stderr)
+        print(f"Usage: python {sys.argv[0]} [list|show|create|edit|delete|git-push|git-pull|git-status]", file=sys.stderr)
         sys.exit(1)
     command = sys.argv[1]
     actions = {
@@ -128,6 +209,9 @@ def main():
         "create": create_secret,
         "edit": edit_secret,
         "delete": delete_secret,
+        "git-push": git_push,
+        "git-pull": git_pull,
+        "git-status": git_status,
     }
     if command in actions:
         actions[command]()
