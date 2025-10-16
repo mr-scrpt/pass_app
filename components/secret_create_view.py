@@ -4,15 +4,17 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLineEdit,
-    QPushButton,
     QLabel,
-    QFormLayout,
+    QPushButton,
+    QLineEdit,
+    QTextEdit,
     QScrollArea,
-    QDialog,
     QSizePolicy,
+    QStackedWidget,
+    QFormLayout,
     QFrame,
     QLayout,
+    QDialog,
 )
 from PySide6.QtGui import QColor
 import qtawesome as qta
@@ -531,10 +533,20 @@ class SecretCreateWidget(QWidget):
     def _handle_back(self):
         """Handle back button click"""
         if self.is_dirty:
-            dialog = ConfirmationDialog(self)
-            dialog.message_label.setText("You have unsaved changes. Discard them?")
-            if dialog.exec() != QDialog.Accepted:
+            dialog = ConfirmationDialog(
+                self,
+                text="You have unsaved changes.",
+                confirm_text="Discard",
+                cancel_text="Cancel",
+                third_button_text="Save"
+            )
+            result = dialog.exec()
+            if result == QDialog.Rejected:  # Cancel
                 return
+            elif result == dialog.third_button_role:  # Save
+                self._prompt_to_save()
+                return
+            # Otherwise (Accepted) - discard and go back
         self.back_callback()
 
     def _prompt_to_save(self):
@@ -706,6 +718,19 @@ class SecretCreateWidget(QWidget):
         key = event.key()
         modifiers = event.modifiers()
         
+        # Navigation mode:
+        # Esc - go back (with confirmation if dirty)
+        if key == Qt.Key_Escape:
+            self._handle_back()
+            return
+        
+        # Enter - enable editing mode
+        focused = self.focusWidget()
+        if key in (Qt.Key_Return, Qt.Key_Enter) and modifiers == Qt.NoModifier:
+            if isinstance(focused, StyledLineEdit):
+                focused.set_editing(True)
+                return
+        
         # Tab navigation within field (between key and value)
         if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
             if self.current_focus_index >= 2:  # We're in a field row
@@ -760,6 +785,12 @@ class SecretCreateWidget(QWidget):
         """Handle keypresses in tags section"""
         key = event.key()
         modifiers = event.modifiers()
+        
+        # Esc - go back (with confirmation if dirty)
+        if key == Qt.Key_Escape:
+            self._handle_back()
+            event.accept()
+            return
         
         checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
         

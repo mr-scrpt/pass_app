@@ -50,7 +50,7 @@ class SecretDetailWidget(QWidget):
         self.back_button.setIcon(qta.icon('fa5s.arrow-left', color=extra['primaryColor']))
         self.back_button.setToolTip("Back to list (Esc)")
         self.back_button.setFixedSize(40, 40)
-        self.back_button.clicked.connect(self.back_callback)
+        self.back_button.clicked.connect(self._handle_back)
         header_layout.addWidget(self.back_button)
         
         self.title_label = QLabel("")
@@ -380,6 +380,25 @@ class SecretDetailWidget(QWidget):
     def _set_dirty(self, dirty):
         self.is_dirty = dirty
         self.save_button.setEnabled(dirty)
+
+    def _handle_back(self):
+        """Handle back button click"""
+        if self.is_dirty:
+            dialog = ConfirmationDialog(
+                self,
+                text="You have unsaved changes.",
+                confirm_text="Discard",
+                cancel_text="Cancel",
+                third_button_text="Save"
+            )
+            result = dialog.exec()
+            if result == QDialog.Rejected:  # Cancel
+                return
+            elif result == dialog.third_button_role:  # Save
+                self._prompt_to_save()
+                return
+            # Otherwise (Accepted) - discard and go back
+        self.back_callback()
 
     def _check_for_changes(self):
         for row in self.field_rows:

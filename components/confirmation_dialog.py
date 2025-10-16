@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+import qtawesome as qta
 
 from ui_theme import extra, CATPPUCCIN_COLORS
 from fa_keyboard_icons import get_fa_keyboard_icon
@@ -50,28 +51,28 @@ class ConfirmationDialog(QDialog):
         button_layout.addWidget(self.cancel_button)
 
         if third_button_text:
-            # Third button with orange icon and orange text
+            # Save button with yellow icon and yellow text
             self.third_button = QPushButton(f"  {third_button_text}")
-            self.third_button.setIcon(get_fa_keyboard_icon('backspace', color='#fab387', size=96))  # Orange
-            self.third_button.setIconSize(QSize(32, 32))
+            self.third_button.setIcon(qta.icon('fa5s.save', color='#f9e2af'))  # Yellow
+            self.third_button.setIconSize(QSize(24, 24))
             self.third_button.setMinimumHeight(50)
             self.third_button.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: rgba(250, 179, 135, 0.15);
-                    color: #fab387;
-                    border: 2px solid #fab387;
+                    background-color: rgba(249, 226, 175, 0.15);
+                    color: #f9e2af;
+                    border: 2px solid #f9e2af;
                     border-radius: 6px;
                     padding: 8px 16px;
                     font-size: 14px;
                     font-weight: bold;
                 }}
                 QPushButton:hover {{
-                    background-color: rgba(250, 179, 135, 0.25);
-                    border-color: #fbc397;
-                    color: #fbc397;
+                    background-color: rgba(249, 226, 175, 0.25);
+                    border-color: #fae8bf;
+                    color: #fae8bf;
                 }}
                 QPushButton:pressed {{
-                    background-color: rgba(250, 179, 135, 0.35);
+                    background-color: rgba(249, 226, 175, 0.35);
                 }}
             """)
             self.third_button.clicked.connect(self.on_third_button_clicked)
@@ -118,5 +119,9 @@ class ConfirmationDialog(QDialog):
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Escape:
             self.reject()
+        elif event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_S:
+            # Ctrl+S - trigger save button (third button)
+            if hasattr(self, 'third_button'):
+                self.third_button.click()
         else:
             super().keyPressEvent(event)

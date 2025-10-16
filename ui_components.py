@@ -33,6 +33,12 @@ class StyledLineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         if self._is_editing:
+            # Esc or Enter - exit editing mode
+            if event.key() == Qt.Key_Escape or event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self.set_editing(False)
+                event.accept()
+                return
+            # Normal text editing
             super().keyPressEvent(event)
         else:
             self.navigation.emit(event)
