@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal, QTimer, QRect, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, QTimer, QRect, QSize, QPoint, QEvent
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -194,7 +194,21 @@ class SecretCreateWidget(QWidget):
         self.namespace_main_container = QWidget()
         self.namespace_main_container.setStyleSheet("QWidget { background-color: transparent; }")
         self.namespace_main_container.setFocusPolicy(Qt.StrongFocus)
-        self.namespace_main_container.keyPressEvent = self._handle_tags_keypress
+        
+        # Override event() to catch Tab before Qt's focus system
+        def tags_event_handler(event):
+            if event.type() == QEvent.KeyPress:
+                key = event.key()
+                # In tags interaction mode, handle Tab/Shift+Tab ourselves
+                if self.tags_interaction_mode and key == Qt.Key_Tab:
+                    self._handle_tags_keypress(event)
+                    return True
+                # Otherwise use normal keyPressEvent handler
+                self._handle_tags_keypress(event)
+                return True
+            return QWidget.event(self.namespace_main_container, event)
+        
+        self.namespace_main_container.event = tags_event_handler
         
         # Border indicator for highlight
         self.tags_border_indicator = QWidget()
@@ -1120,6 +1134,13 @@ class SecretCreateWidget(QWidget):
             # Tab - navigate between tags (same as Right)
             if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
                 self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
+                self._update_tag_highlights()
+                event.accept()
+                return
+            
+            # Shift+Tab - navigate backward (same as Left)
+            if key == Qt.Key_Tab and modifiers == Qt.ShiftModifier:
+                self.current_tag_index = (self.current_tag_index - 1) % len(checkable_buttons)
                 self._update_tag_highlights()
                 event.accept()
                 return

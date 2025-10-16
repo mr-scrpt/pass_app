@@ -5,6 +5,7 @@ import qtawesome as qta
 
 from ui_theme import extra, CATPPUCCIN_COLORS
 from fa_keyboard_icons import get_fa_keyboard_icon
+from components.hotkey_help import HotkeyHelpWidget
 
 class ConfirmationDialog(QDialog):
     def __init__(self, parent=None, text="Are you sure?", confirm_text="Confirm", cancel_text="Cancel", third_button_text=None):
@@ -111,6 +112,22 @@ class ConfirmationDialog(QDialog):
         button_layout.addWidget(self.confirm_button)
 
         layout.addLayout(button_layout)
+        
+        # --- Hotkey Help Widget ---
+        if third_button_text:
+            # With third button (Save)
+            self.help_widget = HotkeyHelpWidget(
+                category="Actions",
+                text="Enter - Confirm  |  Ctrl+S - Save  |  Esc - Cancel"
+            )
+        else:
+            # Standard confirmation
+            self.help_widget = HotkeyHelpWidget(
+                category="Actions",
+                text="Enter - Confirm  |  Esc - Cancel"
+            )
+        layout.addWidget(self.help_widget)
+        
         self.setStyleSheet(f"background-color: {extra['secondaryColor']};")
 
     def on_third_button_clicked(self):
