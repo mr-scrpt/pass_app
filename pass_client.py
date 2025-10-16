@@ -97,7 +97,9 @@ class MainWindow(QMainWindow):
         self.create_widget = SecretCreateWidget(
             back_callback=self._show_search_view_from_create,
             save_callback=self._save_secret,
-            show_status_callback=self.status_bar.show_status
+            show_status_callback=self.status_bar.show_status,
+            namespace_colors=self.namespace_colors,
+            namespaces=list(self.namespace_colors.keys())
         )
         self.create_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.create_widget)
@@ -307,9 +309,14 @@ class MainWindow(QMainWindow):
             self.details_widget._focus_field(0)
     
     def _show_create_view(self):
+        # Update namespaces before showing
+        self.create_widget.update_namespaces(
+            list(self.namespace_colors.keys()),
+            self.namespace_colors
+        )
         self.update_help_text("create")
         self.stack.setCurrentIndex(2)
-        self.create_widget.namespace_input.setFocus()
+        self.create_widget.resource_input.setFocus()
     
     def _show_search_view_from_create(self):
         self.load_data_and_populate()

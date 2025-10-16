@@ -11,7 +11,9 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QDialog,
     QSizePolicy,
+    QFrame,
 )
+from PySide6.QtGui import QColor
 import qtawesome as qta
 
 from ui_theme import extra
@@ -22,13 +24,17 @@ from ui_components import StyledLineEdit
 class SecretCreateWidget(QWidget):
     state_changed = Signal(str)  # Emits the name of the new state
 
-    def __init__(self, back_callback, save_callback, show_status_callback):
+    def __init__(self, back_callback, save_callback, show_status_callback, namespace_colors=None, namespaces=None):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
         self.show_status = show_status_callback
         self.field_rows = []
         self.is_dirty = False
+        self.namespace_colors = namespace_colors or {}
+        self.namespaces = namespaces or []
+        self.selected_namespace = None
+        self.namespace_buttons = []
         
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setSpacing(0)
@@ -67,33 +73,39 @@ class SecretCreateWidget(QWidget):
         
         self.form_container = QWidget()
         self.form_layout = QVBoxLayout(self.form_container)
-        self.form_layout.setSpacing(20)
-        self.form_layout.setContentsMargins(20, 20, 20, 20)
+        self.form_layout.setSpacing(15)
+        self.form_layout.setContentsMargins(20, 10, 20, 20)
         
-        # Namespace and Resource name inputs
-        resource_info_widget = QWidget()
-        resource_info_layout = QHBoxLayout(resource_info_widget)
-        resource_info_layout.setSpacing(10)
+        # Namespace cloud tags (compact, no label)
+        self.tags_container = QWidget()
+        self.tags_layout = QHBoxLayout(self.tags_container)
+        self.tags_layout.setSpacing(6)
+        self.tags_layout.setContentsMargins(0, 0, 0, 0)
+        # No alignment set - will use spacer to push NEW button to right
         
-        self.namespace_input = QLineEdit()
-        self.namespace_input.setPlaceholderText("Namespace")
-        self.namespace_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 10px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
-        self.namespace_input.textChanged.connect(self._check_for_changes)
+        # Scroll area for tags
+        tags_scroll = QScrollArea()
+        tags_scroll.setWidgetResizable(True)
+        tags_scroll.setFrameShape(QScrollArea.NoFrame)
+        tags_scroll.setMaximumHeight(50)
+        tags_scroll.setWidget(self.tags_container)
+        tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
+        self.form_layout.addWidget(tags_scroll)
+        
+        # Resource name input (compact)
         self.resource_input = QLineEdit()
         self.resource_input.setPlaceholderText("Resource Name")
-        self.resource_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 10px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        self.resource_input.setStyleSheet("QLineEdit { font-size: 15px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         self.resource_input.textChanged.connect(self._check_for_changes)
         
-        resource_info_layout.addWidget(self.namespace_input)
-        resource_info_layout.addWidget(self.resource_input)
+        self.form_layout.addWidget(self.resource_input)
         
-        self.form_layout.addWidget(resource_info_widget)
-        
-        # Separator
+        # Separator (thinner)
         separator = QWidget()
-        separator.setFixedHeight(2)
-        separator.setStyleSheet(f"background-color: {extra['primaryColor']};")
+        separator.setFixedHeight(1)
+        separator.setStyleSheet(f"background-color: {extra['primaryColor']}; opacity: 0.3;")
         self.form_layout.addWidget(separator)
         
         # Fields form container
@@ -108,8 +120,120 @@ class SecretCreateWidget(QWidget):
         # Initialize with default secret field
         self._initialize_default_field()
         self._add_add_new_field_button()
+        self._populate_namespace_tags()
         
         self.state_changed.emit("create")
+
+    def _populate_namespace_tags(self):
+        """Populate the namespace tags cloud"""
+        # Clear existing buttons
+        for button in self.namespace_buttons:
+            button.deleteLater()
+        self.namespace_buttons.clear()
+        
+        # Add existing namespace tags
+        for ns in self.namespaces:
+            self._add_namespace_tag(ns, self.namespace_colors.get(ns, extra['primaryColor']))
+        
+        # Add the "new namespace" button (minimal style like ADD NEW FIELD)
+        add_ns_button = QPushButton(" New")
+        add_ns_button.setIcon(qta.icon('fa5s.plus-circle', color='#a6e3a1'))
+        add_ns_button.setStyleSheet(
+            "QPushButton { border: none; padding: 4px 8px; color: #a6e3a1; font-size: 11px; font-weight: bold; } "
+            "QPushButton:hover { background-color: rgba(166, 227, 161, 0.1); }"
+        )
+        add_ns_button.clicked.connect(self._add_new_namespace)
+        add_ns_button.setCursor(Qt.PointingHandCursor)
+        
+        # Add stretch before the NEW button to push it to the right
+        self.tags_layout.addStretch()
+        self.tags_layout.addWidget(add_ns_button)
+        self.namespace_buttons.append(add_ns_button)
+    
+    def _add_namespace_tag(self, namespace, color):
+        """Add a single namespace tag button"""
+        tag_button = QPushButton(namespace)
+        tag_button.setCheckable(True)
+        tag_button.setFixedHeight(24)  # Fixed height for compact look
+        tag_button.setStyleSheet(
+            f"QPushButton {{ "
+            f"  padding: 2px 8px; "
+            f"  border: 1px solid {color}; "
+            f"  border-radius: 12px; "
+            f"  background-color: rgba({self._hex_to_rgb(color)}, 0.2); "
+            f"  color: {color}; "
+            f"  font-size: 11px; "
+            f"  font-weight: bold; "
+            f"  min-height: 0px; "
+            f"  max-height: 24px; "
+            f"}} "
+            f"QPushButton:hover {{ "
+            f"  background-color: rgba({self._hex_to_rgb(color)}, 0.3); "
+            f"}} "
+            f"QPushButton:checked {{ "
+            f"  background-color: {color}; "
+            f"  color: {extra['secondaryColor']}; "
+            f"}}"
+        )
+        tag_button.clicked.connect(lambda: self._select_namespace(namespace, tag_button))
+        tag_button.setCursor(Qt.PointingHandCursor)
+        # Insert before the stretch spacer (which is always second-to-last)
+        insert_pos = self.tags_layout.count() - 2 if self.tags_layout.count() > 1 else 0
+        self.tags_layout.insertWidget(insert_pos, tag_button)
+        self.namespace_buttons.append(tag_button)
+    
+    def _hex_to_rgb(self, hex_color):
+        """Convert hex color to RGB string for rgba()"""
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return f"{r}, {g}, {b}"
+    
+    def _select_namespace(self, namespace, button):
+        """Select a namespace from the cloud"""
+        # Uncheck all other buttons
+        for btn in self.namespace_buttons:
+            if btn != button and btn.isCheckable():
+                btn.setChecked(False)
+        
+        self.selected_namespace = namespace
+        self._check_for_changes()
+    
+    def _add_new_namespace(self):
+        """Add a new namespace"""
+        from PySide6.QtWidgets import QInputDialog
+        
+        text, ok = QInputDialog.getText(self, "New Namespace", "Enter namespace name:")
+        if ok and text.strip():
+            namespace = text.strip()
+            if namespace in self.namespaces:
+                self.show_status(f"Namespace '{namespace}' already exists.", "info")
+                # Select the existing one
+                for btn in self.namespace_buttons:
+                    if btn.isCheckable() and btn.text() == namespace:
+                        btn.setChecked(True)
+                        self._select_namespace(namespace, btn)
+                        break
+            else:
+                # Add to the list
+                self.namespaces.append(namespace)
+                
+                # Assign a color from the palette
+                from ui_theme import CATPPUCCIN_COLORS
+                color_index = len(self.namespace_colors) % len(CATPPUCCIN_COLORS)
+                color = CATPPUCCIN_COLORS[color_index]
+                self.namespace_colors[namespace] = color
+                
+                # Repopulate tags
+                self._populate_namespace_tags()
+                
+                # Select the new namespace
+                for btn in self.namespace_buttons:
+                    if btn.isCheckable() and btn.text() == namespace:
+                        btn.setChecked(True)
+                        self._select_namespace(namespace, btn)
+                        break
+                
+                self.show_status(f"Namespace '{namespace}' created.", "success")
 
     def _initialize_default_field(self):
         """Add the default 'secret' field that cannot be renamed"""
@@ -228,7 +352,7 @@ class SecretCreateWidget(QWidget):
 
     def _check_for_changes(self):
         """Check if there are any changes"""
-        has_data = bool(self.namespace_input.text().strip() or self.resource_input.text().strip())
+        has_data = bool(self.selected_namespace or self.resource_input.text().strip())
         for row in self.field_rows:
             if row['value_input'].text():
                 has_data = True
@@ -246,13 +370,12 @@ class SecretCreateWidget(QWidget):
 
     def _prompt_to_save(self):
         """Prompt to save the new secret"""
-        namespace = self.namespace_input.text().strip()
+        namespace = self.selected_namespace
         resource = self.resource_input.text().strip()
         
         # Validation
         if not namespace:
-            self.show_status("Namespace cannot be empty.", "error")
-            self.namespace_input.setFocus()
+            self.show_status("Please select a namespace.", "error")
             return
         
         if not resource:
@@ -296,7 +419,7 @@ class SecretCreateWidget(QWidget):
 
     def _save_new_secret(self):
         """Save the new secret"""
-        namespace = self.namespace_input.text().strip()
+        namespace = self.selected_namespace
         resource = self.resource_input.text().strip()
         
         # Build content
@@ -328,8 +451,13 @@ class SecretCreateWidget(QWidget):
 
     def reset_form(self):
         """Reset the form to initial state"""
-        self.namespace_input.clear()
+        self.selected_namespace = None
         self.resource_input.clear()
+        
+        # Uncheck all namespace buttons
+        for btn in self.namespace_buttons:
+            if btn.isCheckable():
+                btn.setChecked(False)
         
         # Clear all field rows
         for row in self.field_rows:
@@ -344,4 +472,10 @@ class SecretCreateWidget(QWidget):
         self._add_add_new_field_button()
         
         self.is_dirty = False
-        self.namespace_input.setFocus()
+        self.resource_input.setFocus()
+    
+    def update_namespaces(self, namespaces, namespace_colors):
+        """Update the list of namespaces"""
+        self.namespaces = namespaces
+        self.namespace_colors = namespace_colors
+        self._populate_namespace_tags()
