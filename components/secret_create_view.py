@@ -564,18 +564,35 @@ class SecretCreateWidget(QWidget):
         if self.current_focus_index == 0:
             self._on_tags_focus_out()
         
-        # Check if there's already an empty field
+        # Check if there's already a partially or completely empty field
         for row in self.field_rows:
             if row['key_editable']:  # Only check editable fields
                 key = row['key_input'].text().strip()
                 value = row['value_input'].text().strip()
-                if not key and not value:  # Both empty
-                    # Focus on this empty field instead of adding new one
+                
+                # Both empty - focus on key
+                if not key and not value:
                     row['key_input'].setFocus()
                     row['key_input'].set_editing(True)
                     return
+                
+                # Only key filled - focus on value and highlight red
+                if key and not value:
+                    self._highlight_field_error(row, 'value')
+                    row['value_input'].setFocus()
+                    row['value_input'].set_editing(True)
+                    self.show_status(f"Field '{key}' is missing a value.", "error")
+                    return
+                
+                # Only value filled - focus on key and highlight red
+                if not key and value:
+                    self._highlight_field_error(row, 'key')
+                    row['key_input'].setFocus()
+                    row['key_input'].set_editing(True)
+                    self.show_status("Field is missing a name.", "error")
+                    return
         
-        # No empty fields found, add new one
+        # No empty or partially filled fields found, add new one
         self._add_field_row("", "", is_secret=False, key_editable=True)
         # Focus on the new field's key input
         if self.field_rows:
@@ -589,6 +606,25 @@ class SecretCreateWidget(QWidget):
             self.field_rows.remove(row_data)
             row_data['container'].deleteLater()
             self._check_for_changes()
+    
+    def _highlight_field_error(self, row, field_type):
+        """Highlight a field with red border to indicate error"""
+        if field_type == 'key':
+            row['key_input'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+            # Reset after 3 seconds
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row, 'key'))
+        elif field_type == 'value':
+            row['value_input'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+            # Reset after 3 seconds
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row, 'value'))
+    
+    def _reset_field_style(self, row, field_type):
+        """Reset field style to normal"""
+        normal_style = "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+        if field_type == 'key' and row in self.field_rows:
+            row['key_input'].setStyleSheet(normal_style)
+        elif field_type == 'value' and row in self.field_rows:
+            row['value_input'].setStyleSheet(normal_style)
     
     def _focus_after_delete(self, deleted_index):
         """Restore focus after deleting a field"""
@@ -619,12 +655,20 @@ class SecretCreateWidget(QWidget):
             button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
 
     def _check_for_changes(self):
-        """Check if there are any changes"""
+        """Check if there are unsaved changes"""
+        # Check if any data is entered
         has_data = bool(self.selected_namespace or self.resource_input.text().strip())
         for row in self.field_rows:
-            if row['value_input'].text():
-                has_data = True
-                break
+            # Check both key and value for editable fields
+            if row['key_editable']:
+                if row['key_input'].text().strip() or row['value_input'].text().strip():
+                    has_data = True
+                    break
+            else:
+                # For non-editable fields (like secret), just check value
+                if row['value_input'].text().strip():
+                    has_data = True
+                    break
         self.is_dirty = has_data
 
     def _handle_back(self):
@@ -654,6 +698,10 @@ class SecretCreateWidget(QWidget):
         # Validation
         if not namespace:
             self.show_status("Please select a namespace.", "error")
+            # Focus on tags section and enter interaction mode
+            self.namespace_main_container.setFocus()
+            self._on_tags_focus_in()
+            self._enter_tags_interaction_mode()
             return
         
         if not resource:
@@ -684,11 +732,13 @@ class SecretCreateWidget(QWidget):
                 key = row['key_input'].text().strip()
                 value = row['value_input'].text().strip()
                 if key and not value:
+                    self._highlight_field_error(row, 'value')
                     self.show_status(f"Field '{key}' has no value.", "error")
                     row['value_input'].setFocus()
                     row['value_input'].set_editing(True)
                     return
                 if value and not key:
+                    self._highlight_field_error(row, 'key')
                     self.show_status("Field name cannot be empty.", "error")
                     row['key_input'].setFocus()
                     row['key_input'].set_editing(True)
@@ -699,6 +749,7 @@ class SecretCreateWidget(QWidget):
             if resource in self.namespace_resources[namespace]:
                 self.show_status(f"Resource '{resource}' already exists in namespace '{namespace}'.", "error")
                 self.resource_input.setFocus()
+                self.resource_input.set_editing(True)
                 self.resource_input.selectAll()
                 return
         
