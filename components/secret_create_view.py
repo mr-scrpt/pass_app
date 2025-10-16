@@ -158,7 +158,7 @@ class SecretCreateWidget(QWidget):
         self.back_button.clicked.connect(self._handle_back)
         header_layout.addWidget(self.back_button)
         
-        self.title_label = QLabel("Create New Secret")
+        self.title_label = QLabel("Create New Resource")
         self.title_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16pt; font-weight: bold;")
         self.title_label.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(self.title_label, stretch=1)
@@ -255,24 +255,32 @@ class SecretCreateWidget(QWidget):
         
         self.form_layout.addWidget(tags_section_wrapper)
         
-        # Resource name input (compact) with container for border highlight
+        # Resource name input with label (like form fields)
         self.resource_input_container = QWidget()
         self.resource_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
         resource_input_layout = QHBoxLayout(self.resource_input_container)
         resource_input_layout.setContentsMargins(0, 0, 0, 0)
-        resource_input_layout.setSpacing(0)
+        resource_input_layout.setSpacing(12)
         
+        # Label for resource name
+        resource_label = QLabel("Resource:")
+        resource_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;")
+        resource_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+        resource_label.setFixedWidth(150)
+        resource_input_layout.addWidget(resource_label)
+        
+        # Resource input
         self.resource_input = StyledLineEdit()
-        self.resource_input.setPlaceholderText("Resource Name")
-        self.resource_input.setStyleSheet("QLineEdit { font-size: 15px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        self.resource_input.setPlaceholderText("Enter resource name")
+        self.resource_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         self.resource_input.textChanged.connect(self._check_for_changes)
         self.resource_input.navigation.connect(self._handle_navigation)
         self.resource_input.focusInEvent = lambda e: self._on_resource_focus_in(e)
         self.resource_input.focusOutEvent = lambda e: self._on_resource_focus_out(e)
         # Track editing state changes
         self.resource_input.editing_changed = lambda is_editing: self._on_editing_state_changed(self.resource_input_container, is_editing)
-        resource_input_layout.addWidget(self.resource_input)
+        resource_input_layout.addWidget(self.resource_input, stretch=1)
         
         self.form_layout.addWidget(self.resource_input_container)
         
@@ -761,12 +769,12 @@ class SecretCreateWidget(QWidget):
     
     def _on_resource_focus_in(self, event):
         """Highlight resource input on focus"""
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
         self.current_focus_index = 1
     
     def _on_resource_focus_out(self, event):
         """Remove highlight from resource input"""
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
     
     def _on_field_focus_in(self, event, container):
         """Highlight field row on focus"""
@@ -785,16 +793,10 @@ class SecretCreateWidget(QWidget):
         """Change border color based on editing state"""
         if is_editing:
             # Yellow border for editing mode
-            if container == self.resource_input_container:
-                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
-            else:
-                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
+            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
         else:
             # Blue border for navigation mode
-            if container == self.resource_input_container:
-                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; margin-top: 0px; margin-bottom: 0px; }")
-            else:
-                container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
     
     def _focus_element(self, index):
         """Focus on element by index (0 = tags, 1 = resource_input, 2+ = field_rows)"""
