@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Pass Keyboard Control
+GenericName=Password Manager GUI
+Comment=AI-generated keyboard-driven GUI for pass with total keyboard control
+Exec=pass-kb
+Icon=dialog-password
+Terminal=false
+Categories=Utility;Security;
+Keywords=password;manager;pass;gpg;security;encryption;keyboard;
+StartupNotify=true
+StartupWMClass=pass-kb
+X-GNOME-UsesNotifications=false
