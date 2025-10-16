@@ -27,6 +27,7 @@ class StyledLineEdit(QLineEdit):
         super().__init__(parent)
         self._is_editing = False
         self.editing_changed = None  # Callback for editing state changes
+        self.on_escape_empty = None  # Callback for Esc on empty field
 
     def set_editing(self, is_editing):
         self._is_editing = is_editing
@@ -37,8 +38,16 @@ class StyledLineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         if self._is_editing:
-            # Esc or Enter - exit editing mode
-            if event.key() == Qt.Key_Escape or event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            # Esc - exit editing mode (and maybe delete if empty)
+            if event.key() == Qt.Key_Escape:
+                # Check if empty and call callback
+                if not self.text().strip() and self.on_escape_empty:
+                    self.on_escape_empty()
+                self.set_editing(False)
+                event.accept()
+                return
+            # Enter - exit editing mode
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 self.set_editing(False)
                 event.accept()
                 return

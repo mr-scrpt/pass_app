@@ -280,6 +280,8 @@ class SecretCreateWidget(QWidget):
         self.resource_input.focusOutEvent = lambda e: self._on_resource_focus_out(e)
         # Track editing state changes
         self.resource_input.editing_changed = lambda is_editing: self._on_editing_state_changed(self.resource_input_container, is_editing)
+        # Esc on empty field - do nothing (don't exit page, just exit editing mode)
+        self.resource_input.on_escape_empty = lambda: None
         resource_input_layout.addWidget(self.resource_input, stretch=1)
         
         self.form_layout.addWidget(self.resource_input_container)
@@ -438,6 +440,25 @@ class SecretCreateWidget(QWidget):
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
             # Track editing state changes
             key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
+            # Handle Esc on empty field - check if whole row is empty and delete
+            def on_key_escape():
+                # Store reference before checking
+                row_to_check = None
+                row_index = -1
+                for i, r in enumerate(self.field_rows):
+                    if r.get('key_input') == key_input:
+                        row_to_check = r
+                        row_index = i
+                        break
+                if row_to_check and row_to_check['key_editable']:
+                    k = row_to_check['key_input'].text().strip()
+                    v = row_to_check['value_input'].text().strip()
+                    if not k and not v:
+                        # Delete the row
+                        self._delete_field_row(row_to_check)
+                        # Set focus to previous field or resource_input
+                        QTimer.singleShot(10, lambda: self._focus_after_delete(row_index))
+            key_input.on_escape_empty = on_key_escape
         else:
             key_input = StyledLineEdit(key)
             key_input.set_editing(False)
@@ -448,6 +469,8 @@ class SecretCreateWidget(QWidget):
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
             # Track editing state changes (even for non-editable)
             key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
+            # For non-editable key (secret field), just exit editing mode
+            key_input.on_escape_empty = lambda: None
         
         container_layout.addWidget(key_input)
         
@@ -469,6 +492,28 @@ class SecretCreateWidget(QWidget):
         value_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
         # Track editing state changes
         value_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
+        # Handle Esc on empty field - check if whole row is empty and delete (only for editable fields)
+        if key_editable:
+            def on_value_escape():
+                row_to_check = None
+                row_index = -1
+                for i, r in enumerate(self.field_rows):
+                    if r.get('value_input') == value_input:
+                        row_to_check = r
+                        row_index = i
+                        break
+                if row_to_check and row_to_check['key_editable']:
+                    k = row_to_check['key_input'].text().strip()
+                    v = row_to_check['value_input'].text().strip()
+                    if not k and not v:
+                        # Delete the row
+                        self._delete_field_row(row_to_check)
+                        # Set focus to previous field or resource_input
+                        QTimer.singleShot(10, lambda: self._focus_after_delete(row_index))
+            value_input.on_escape_empty = on_value_escape
+        else:
+            # For non-editable fields (like secret), just exit editing mode
+            value_input.on_escape_empty = lambda: None
         value_layout.addWidget(value_input, stretch=1)
         
         # Toggle visibility button
@@ -514,18 +559,28 @@ class SecretCreateWidget(QWidget):
         self.fields_form_layout.addRow(self.add_field_button)
 
     def _add_new_field(self):
-        """Add a new editable field"""
-        # Remove the button temporarily
-        self.fields_form_layout.removeRow(self.add_field_button)
+        """Add a new field to the form"""
+        # Remove highlight from tags section if active
+        if self.current_focus_index == 0:
+            self._on_tags_focus_out()
         
-        # Add new field row
+        # Check if there's already an empty field
+        for row in self.field_rows:
+            if row['key_editable']:  # Only check editable fields
+                key = row['key_input'].text().strip()
+                value = row['value_input'].text().strip()
+                if not key and not value:  # Both empty
+                    # Focus on this empty field instead of adding new one
+                    row['key_input'].setFocus()
+                    row['key_input'].set_editing(True)
+                    return
+        
+        # No empty fields found, add new one
         self._add_field_row("", "", is_secret=False, key_editable=True)
-        
-        # Re-add the button
-        self._add_add_new_field_button()
-        
         # Focus on the new field's key input
-        self.field_rows[-1]['key_input'].setFocus()
+        if self.field_rows:
+            self.field_rows[-1]['key_input'].setFocus()
+            self.field_rows[-1]['key_input'].set_editing(True)
         self._check_for_changes()
 
     def _delete_field_row(self, row_data):
@@ -534,6 +589,25 @@ class SecretCreateWidget(QWidget):
             self.field_rows.remove(row_data)
             row_data['container'].deleteLater()
             self._check_for_changes()
+    
+    def _focus_after_delete(self, deleted_index):
+        """Restore focus after deleting a field"""
+        # If there are still fields, focus on the previous one
+        if self.field_rows:
+            # Try to focus on the field at the same index (or previous if last was deleted)
+            target_index = min(deleted_index, len(self.field_rows) - 1)
+            if target_index >= 0:
+                # Find the first editable field starting from target
+                for i in range(len(self.field_rows) - 1, -1, -1):
+                    if self.field_rows[i]['key_editable']:
+                        self.field_rows[i]['value_input'].setFocus()
+                        return
+                # If no editable fields found, focus on last field
+                if self.field_rows:
+                    self.field_rows[-1]['value_input'].setFocus()
+                    return
+        # No fields left, focus on resource_input
+        self.resource_input.setFocus()
 
     def _toggle_visibility(self, line_edit, button):
         """Toggle password visibility"""
@@ -585,6 +659,7 @@ class SecretCreateWidget(QWidget):
         if not resource:
             self.show_status("Resource name cannot be empty.", "error")
             self.resource_input.setFocus()
+            self.resource_input.set_editing(True)
             return
         
         # Check if secret field has a value
@@ -599,21 +674,24 @@ class SecretCreateWidget(QWidget):
             for row in self.field_rows:
                 if not row['key_editable']:
                     row['value_input'].setFocus()
+                    row['value_input'].set_editing(True)
                     break
             return
         
-        # Validate other fields
+        # Validate other fields - both key and value must be filled or both empty
         for row in self.field_rows:
             if row['key_editable']:  # Skip the secret field
                 key = row['key_input'].text().strip()
-                value = row['value_input'].text()
+                value = row['value_input'].text().strip()
                 if key and not value:
                     self.show_status(f"Field '{key}' has no value.", "error")
                     row['value_input'].setFocus()
+                    row['value_input'].set_editing(True)
                     return
                 if value and not key:
                     self.show_status("Field name cannot be empty.", "error")
                     row['key_input'].setFocus()
+                    row['key_input'].set_editing(True)
                     return
         
         # Check if resource already exists in this namespace
@@ -696,6 +774,11 @@ class SecretCreateWidget(QWidget):
     
     def _on_tags_focus_in(self):
         """Highlight tags section on focus (blue for navigation)"""
+        # Remove highlight from other sections
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        for row in self.field_rows:
+            row['container'].setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        
         self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")  # Blue for navigation
         self.current_focus_index = 0
         self.tags_interaction_mode = False
@@ -769,6 +852,9 @@ class SecretCreateWidget(QWidget):
     
     def _on_resource_focus_in(self, event):
         """Highlight resource input on focus"""
+        # Remove highlight from tags section
+        self.tags_border_indicator.setStyleSheet("background-color: transparent;")
+        
         self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
         self.current_focus_index = 1
     
@@ -778,6 +864,11 @@ class SecretCreateWidget(QWidget):
     
     def _on_field_focus_in(self, event, container):
         """Highlight field row on focus"""
+        # Remove highlight from tags and resource sections
+        self.tags_border_indicator.setStyleSheet("background-color: transparent;")
+        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        
+        # Highlight this field
         container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
         # Update current focus index
         for i, row in enumerate(self.field_rows):
@@ -881,6 +972,18 @@ class SecretCreateWidget(QWidget):
         """Handle keypresses in tags section"""
         key = event.key()
         modifiers = event.modifiers()
+        
+        # Ctrl+N - add new field (works in both modes)
+        if modifiers == Qt.ControlModifier and key == Qt.Key_N:
+            self._add_new_field()
+            event.accept()
+            return
+        
+        # Ctrl+T - add new tag (works in both modes)
+        if modifiers == Qt.ControlModifier and key == Qt.Key_T:
+            self._add_new_namespace()
+            event.accept()
+            return
         
         checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
         
