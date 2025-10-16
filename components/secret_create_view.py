@@ -358,14 +358,11 @@ class SecretCreateWidget(QWidget):
             if btn != button and btn.isCheckable():
                 btn.setChecked(False)
         
-        # Toggle the clicked button
-        button.setChecked(not button.isChecked())
+        # Check the selected button
+        button.setChecked(True)
         
         # Update selected namespace
-        if button.isChecked():
-            self.selected_namespace = namespace
-        else:
-            self.selected_namespace = None
+        self.selected_namespace = namespace
         
         self._check_for_changes()
         self._update_tag_highlights()  # Update visual state after selection
@@ -727,44 +724,40 @@ class SecretCreateWidget(QWidget):
             color = self.namespace_colors.get(namespace, extra['primaryColor'])
             rgb = self._hex_to_rgb(color)
             
-            # Selected tag styling
-            if btn.isChecked():
-                base_style = f"background-color: {color}; color: {extra['secondaryColor']};"
-            else:
-                base_style = f"background-color: rgba({rgb}, 0.2); color: {color};"
+            # Determine border based on state
+            is_active = self.tags_interaction_mode and i == self.current_tag_index
+            is_selected = btn.isChecked()
             
-            # Active tag in interaction mode - add glow/opacity
-            if self.tags_interaction_mode and i == self.current_tag_index:
-                # Active tag gets a bright border and slightly higher opacity
-                btn.setStyleSheet(
-                    f"QPushButton {{ "
-                    f"  padding: 2px 8px; "
-                    f"  border: 2px solid #f9e2af; "
-                    f"  border-radius: 12px; "
-                    f"  {base_style} "
-                    f"  font-size: 11px; "
-                    f"  font-weight: bold; "
-                    f"  min-height: 0px; "
-                    f"  max-height: 24px; "
-                    f"}} "
-                )
+            # Border color
+            if is_active:
+                border_style = f"border: 2px solid #f9e2af;"
+            elif is_selected:
+                border_style = f"border: 2px solid {color};"
             else:
-                # Normal styling
-                btn.setStyleSheet(
-                    f"QPushButton {{ "
-                    f"  padding: 2px 8px; "
-                    f"  border: 1px solid {color}; "
-                    f"  border-radius: 12px; "
-                    f"  {base_style} "
-                    f"  font-size: 11px; "
-                    f"  font-weight: bold; "
-                    f"  min-height: 0px; "
-                    f"  max-height: 24px; "
-                    f"}} "
-                    f"QPushButton:hover {{ "
-                    f"  background-color: rgba({rgb}, 0.3); "
-                    f"}} "
-                )
+                border_style = f"border: 1px solid {color};"
+            
+            # Background and text color
+            if is_selected:
+                bg_text_style = f"background-color: {color}; color: {extra['secondaryColor']};"
+            else:
+                bg_text_style = f"background-color: rgba({rgb}, 0.2); color: {color};"
+            
+            # Apply styling
+            btn.setStyleSheet(
+                f"QPushButton {{ "
+                f"  padding: 2px 8px; "
+                f"  {border_style} "
+                f"  border-radius: 12px; "
+                f"  {bg_text_style} "
+                f"  font-size: 11px; "
+                f"  font-weight: bold; "
+                f"  min-height: 0px; "
+                f"  max-height: 24px; "
+                f"}} "
+                f"QPushButton:hover {{ "
+                f"  background-color: rgba({rgb}, 0.3); "
+                f"}} "
+            )
     
     def _on_resource_focus_in(self, event):
         """Highlight resource input on focus"""
@@ -952,6 +945,8 @@ class SecretCreateWidget(QWidget):
             if key in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
                 if self.current_tag_index < len(checkable_buttons):
                     btn = checkable_buttons[self.current_tag_index]
-                    btn.click()
+                    namespace = btn.text()
+                    # Directly call select method instead of click()
+                    self._select_namespace(namespace, btn)
                 event.accept()
                 return
