@@ -1,5 +1,6 @@
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtCore import Qt, Signal, QEvent
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit
 
 from ui_theme import extra
 
@@ -18,3 +19,20 @@ class HotkeyHelpWidget(QWidget):
 
     def setText(self, text):
         self.label.setText(text)
+
+class StyledLineEdit(QLineEdit):
+    navigation = Signal(QKeyEvent)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._is_editing = False
+
+    def set_editing(self, is_editing):
+        self._is_editing = is_editing
+        self.setReadOnly(not is_editing)
+
+    def keyPressEvent(self, event):
+        if self._is_editing:
+            super().keyPressEvent(event)
+        else:
+            self.navigation.emit(event)

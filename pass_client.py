@@ -6,10 +6,12 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QStackedWidget,
+    QPushButton,
     QDialog
 )
 from qt_material import apply_stylesheet
@@ -19,6 +21,7 @@ from ui_theme import CATPPUCCIN_COLORS, extra
 from components.confirmation_dialog import ConfirmationDialog
 from components.hotkey_help import HotkeyHelpWidget
 from components.secret_detail_view import SecretDetailWidget
+from components.secret_create_view import SecretCreateWidget
 from components.secret_list_item import SecretListItem
 from components.password_generator_dialog import PasswordGeneratorDialog
 from components.status_bar import StatusBarWidget
@@ -56,9 +59,26 @@ class MainWindow(QMainWindow):
         # --- Search View ---
         self.search_view = QWidget()
         search_layout = QVBoxLayout(self.search_view)
+        
+        # Add create button to search view
+        search_header = QWidget()
+        search_header_layout = QHBoxLayout(search_header)
+        search_header_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search secrets...")
-        search_layout.addWidget(self.search_bar)
+        search_header_layout.addWidget(self.search_bar, stretch=1)
+        
+        import qtawesome as qta
+        self.create_button = QPushButton()
+        self.create_button.setIcon(qta.icon('fa5s.plus', color='#a6e3a1'))
+        self.create_button.setToolTip("Create new secret (Ctrl+N)")
+        self.create_button.setFixedSize(40, 40)
+        self.create_button.clicked.connect(self._show_create_view)
+        search_header_layout.addWidget(self.create_button)
+        
+        search_layout.addWidget(search_header)
+        
         self.results_list = QListWidget()
         self.results_list.setStyleSheet("QListWidget::item { border: none; padding: 0px; } QListWidget::item:selected { background-color: rgba(137, 180, 250, 0.2); border-left: 3px solid #89b4fa; } QListWidget::item:hover { background-color: rgba(137, 180, 250, 0.1); }")
         search_layout.addWidget(self.results_list)
@@ -72,6 +92,15 @@ class MainWindow(QMainWindow):
         )
         self.details_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.details_widget)
+        
+        # --- Create View ---
+        self.create_widget = SecretCreateWidget(
+            back_callback=self._show_search_view_from_create,
+            save_callback=self._save_secret,
+            show_status_callback=self.status_bar.show_status
+        )
+        self.create_widget.state_changed.connect(self.update_help_text)
+        self.stack.addWidget(self.create_widget)
 
         # --- Initial Load & Connections ---
         self.load_data_and_populate()
@@ -104,7 +133,7 @@ class MainWindow(QMainWindow):
         help_texts = {
             "search": {
                 "nav": "<b>Navigate:</b> ↑/↓",
-                "action": "<b>View:</b> Enter &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G"
+                "action": "<b>View:</b> Enter &nbsp;&nbsp; <b>Create New:</b> Ctrl+N &nbsp;&nbsp; <b>Generate Pass:</b> Ctrl+G / Ctrl+Shift+G"
             },
             "normal": {
                 "nav": "<b>Navigate:</b> ↑/↓, Tab &nbsp;&nbsp; <b>Back:</b> Esc",
@@ -121,6 +150,10 @@ class MainWindow(QMainWindow):
             "add_new": {
                 "nav": "<b>Navigate:</b> Tab",
                 "action": "<b>Confirm:</b> Enter &nbsp;&nbsp; <b>Cancel:</b> Esc"
+            },
+            "create": {
+                "nav": "<b>Navigate:</b> Tab &nbsp;&nbsp; <b>Back:</b> Esc",
+                "action": "<b>Add Field:</b> Click + Button &nbsp;&nbsp; <b>Save:</b> Ctrl+S"
             }
         }
         texts = help_texts.get(state, {"nav": "", "action": ""})
@@ -145,7 +178,10 @@ class MainWindow(QMainWindow):
         return False
 
     def handle_add_field(self, event):
-        if self.stack.currentWidget() == self.details_widget:
+        if self.stack.currentWidget() == self.search_view:
+            self._show_create_view()
+            return True
+        elif self.stack.currentWidget() == self.details_widget:
             self.details_widget.add_new_field_row()
             return True
         return False
@@ -269,6 +305,15 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)
+    
+    def _show_create_view(self):
+        self.update_help_text("create")
+        self.stack.setCurrentIndex(2)
+        self.create_widget.namespace_input.setFocus()
+    
+    def _show_search_view_from_create(self):
+        self.load_data_and_populate()
+        self._show_search_view()
 
 def main():
     app = QApplication(sys.argv)
