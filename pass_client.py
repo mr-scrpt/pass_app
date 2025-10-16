@@ -33,6 +33,7 @@ from components.secret_create_view import SecretCreateWidget
 from components.secret_list_item import SecretListItem
 from components.password_generator_dialog import PasswordGeneratorDialog
 from components.status_bar import StatusBarWidget
+from components.hotkey_cheatsheet_dialog import HotkeyCheatsheetDialog
 from hotkey_manager import HotkeyManager
 from utils import generate_password
 
@@ -105,13 +106,62 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
-        self.status_bar = StatusBarWidget()
-        main_layout.addWidget(self.status_bar)
-
         self.nav_help_widget = HotkeyHelpWidget(category="Navigation")
         self.action_help_widget = HotkeyHelpWidget(category="Actions")
         main_layout.addWidget(self.nav_help_widget)
         main_layout.addWidget(self.action_help_widget)
+        
+        # Footer: mode (left) + help hint (center) + status (right)
+        footer_widget = QWidget()
+        footer_widget.setStyleSheet("background-color: transparent; padding: 4px 15px;")
+        footer_layout = QHBoxLayout(footer_widget)
+        footer_layout.setContentsMargins(10, 3, 10, 3)
+        footer_layout.setSpacing(15)
+        
+        # Mode label (left) - colored
+        self.mode_label = QLabel("SEARCH MODE")
+        self.mode_label.setStyleSheet("""
+            color: #f9e2af;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 0px;
+            background-color: transparent;
+        """)
+        self.mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.mode_label.setMinimumWidth(150)
+        footer_layout.addWidget(self.mode_label)
+        
+        # Left spacer
+        footer_layout.addStretch(1)
+        
+        # Help hint (center)
+        self.help_hint = QLabel("Press F1 or Ctrl+H for full keyboard shortcuts reference")
+        self.help_hint.setStyleSheet("""
+            color: #6c7086;
+            font-size: 10px;
+            font-style: italic;
+            padding: 0px;
+            background-color: transparent;
+        """)
+        self.help_hint.setAlignment(Qt.AlignCenter)
+        footer_layout.addWidget(self.help_hint)
+        
+        # Right spacer
+        footer_layout.addStretch(1)
+        
+        # Status label (right) - colored by type
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("""
+            color: #6c7086;
+            font-size: 10px;
+            padding: 0px;
+            background-color: transparent;
+        """)
+        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_label.setMinimumWidth(200)
+        footer_layout.addWidget(self.status_label)
+        
+        main_layout.addWidget(footer_widget)
 
         # --- Search View ---
         self.search_view = QWidget()
@@ -182,7 +232,7 @@ class MainWindow(QMainWindow):
         self.details_widget = SecretDetailWidget(
             back_callback=self._show_search_view,
             save_callback=self._save_secret,
-            show_status_callback=self.status_bar.show_status
+            show_status_callback=self.show_status
         )
         self.details_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.details_widget)
@@ -191,7 +241,7 @@ class MainWindow(QMainWindow):
         self.create_widget = SecretCreateWidget(
             back_callback=self._show_search_view_from_create,
             save_callback=self._save_secret,
-            show_status_callback=self.status_bar.show_status,
+            show_status_callback=self.show_status,
             namespace_colors=self.namespace_colors,
             namespaces=list(self.namespace_colors.keys()),
             namespace_resources=self.namespace_resources
@@ -215,6 +265,8 @@ class MainWindow(QMainWindow):
     def _register_hotkeys(self):
         self.hotkey_manager.register('ctrl+g', self.handle_simple_generate, priority=20)
         self.hotkey_manager.register('ctrl+shift+g', self.handle_advanced_generate, priority=20)
+        self.hotkey_manager.register('f1', self.handle_help, priority=25)
+        self.hotkey_manager.register('ctrl+h', self.handle_help, priority=25)
         self.hotkey_manager.register('esc', self.handle_esc, priority=10)
         self.hotkey_manager.register('ctrl+s', self.handle_save, priority=10)
         self.hotkey_manager.register('ctrl+r', self.handle_sync, priority=10)
@@ -226,11 +278,56 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, source, event):
         if event.type() == QEvent.KeyPress:
+            # Priority handling for help - always allow F1/Ctrl+H
+            key = event.key()
+            modifiers = event.modifiers()
+            if key == Qt.Key_F1 or (key == Qt.Key_H and modifiers == Qt.ControlModifier):
+                self.handle_help(event)
+                return True
+            
             if self.hotkey_manager.handle(event):
                 return True
         return super().eventFilter(source, event)
 
+    def show_status(self, message, status_type="info"):
+        """Show status message with color coding"""
+        color_map = {
+            "info": "#89b4fa",      # Blue
+            "success": "#a6e3a1",   # Green
+            "error": "#f38ba8"      # Red
+        }
+        color = color_map.get(status_type, "#6c7086")
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet(f"""
+            color: {color};
+            font-size: 10px;
+            padding: 0px;
+            background-color: transparent;
+        """)
+    
     def update_help_text(self, state):
+        # Update mode label with color coding
+        mode_config = {
+            "search": {"text": "SEARCH MODE", "color": "#89b4fa"},         # Blue
+            "normal": {"text": "NORMAL MODE", "color": "#a6e3a1"},         # Green
+            "edit": {"text": "EDITING", "color": "#f9e2af"},               # Yellow
+            "deep_edit": {"text": "DEEP EDIT", "color": "#fab387"},        # Orange
+            "add_new": {"text": "ADD NEW FIELD", "color": "#cba6f7"},      # Purple
+            "create": {"text": "CREATE MODE", "color": "#89dceb"},         # Cyan
+            "create_tags": {"text": "TAGS SELECT", "color": "#f5c2e7"},    # Pink
+            "create_editing": {"text": "EDITING", "color": "#f9e2af"},     # Yellow
+            "create_new_field": {"text": "NEW FIELD", "color": "#cba6f7"}  # Purple
+        }
+        config = mode_config.get(state, {"text": "UNKNOWN", "color": "#6c7086"})
+        self.mode_label.setText(config["text"])
+        self.mode_label.setStyleSheet(f"""
+            color: {config["color"]};
+            font-size: 10px;
+            font-weight: bold;
+            padding: 0px;
+            background-color: transparent;
+        """)
+        
         help_texts = {
             "search": {
                 "category_nav": "Navigation",
@@ -299,11 +396,17 @@ class MainWindow(QMainWindow):
     def handle_simple_generate(self, event):
         password = generate_password()
         QApplication.clipboard().setText(password)
-        self.status_bar.show_status("Password generated and copied to clipboard.")
+        self.show_status("Password generated and copied to clipboard.", "success")
         return True
 
     def handle_advanced_generate(self, event):
-        dialog = PasswordGeneratorDialog(self, show_status_callback=self.status_bar.show_status)
+        dialog = PasswordGeneratorDialog(self, show_status_callback=self.show_status)
+        dialog.exec()
+        return True
+    
+    def handle_help(self, event):
+        """Show hotkey cheatsheet dialog"""
+        dialog = HotkeyCheatsheetDialog(self)
         dialog.exec()
         return True
 
@@ -476,7 +579,7 @@ class MainWindow(QMainWindow):
         if self.git_worker and self.git_worker.isRunning():
             return  # Already syncing
         
-        self.status_bar.show_status("Syncing with remote...", "info")
+        self.show_status("Syncing with remote...", "info")
         self.sync_button.setEnabled(False)
         
         # Show loader and start animation
@@ -500,11 +603,11 @@ class MainWindow(QMainWindow):
         if success:
             # Reload data
             self.load_data_and_populate()
-            self.status_bar.show_status(message, "success")
+            self.show_status(message, "success")
             # Check status to update indicator
             self._check_git_status_async()
         else:
-            self.status_bar.show_status(message, "error")
+            self.show_status(message, "error")
     
     def _animate_loader(self):
         """Animate the sync loader."""
