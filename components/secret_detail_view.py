@@ -195,16 +195,47 @@ class SecretDetailWidget(QWidget):
         self.form_layout.addRow(self.add_field_button)
 
     def add_new_field_row(self):
+        """Add a new field row with validation"""
+        # Check if there's already a partially or completely empty field
+        for row_data in self.new_rows:
+            key = row_data['key_le'].text().strip()
+            value = row_data['val_le'].text().strip()
+            
+            # Both empty - focus on key
+            if not key and not value:
+                row_data['key_le'].setFocus()
+                row_data['key_le'].set_editing(True)
+                return
+            
+            # Only key filled - focus on value and highlight red
+            if key and not value:
+                self._highlight_field_error(row_data, 'value')
+                row_data['val_le'].setFocus()
+                row_data['val_le'].set_editing(True)
+                self.show_status(f"Field '{key}' is missing a value.", "error")
+                return
+            
+            # Only value filled - focus on key and highlight red
+            if not key and value:
+                self._highlight_field_error(row_data, 'key')
+                row_data['key_le'].setFocus()
+                row_data['key_le'].set_editing(True)
+                self.show_status("Field is missing a name.", "error")
+                return
+        
+        # No empty or partially filled fields found, add new one
         key_edit = StyledLineEdit()
         key_edit.setPlaceholderText("Field Name")
         key_edit.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         key_edit.textChanged.connect(self._check_for_changes)
+        key_edit.navigation.connect(self._handle_navigation)
         key_edit.set_editing(True)
 
         value_edit = StyledLineEdit()
         value_edit.setPlaceholderText("Field Value")
         value_edit.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
         value_edit.textChanged.connect(self._check_for_changes)
+        value_edit.navigation.connect(self._handle_navigation)
         value_edit.set_editing(True)
 
         remove_button = QPushButton()
@@ -235,6 +266,22 @@ class SecretDetailWidget(QWidget):
         key_edit.editing_changed = lambda is_editing, c=new_row_container: self._on_editing_state_changed(c, is_editing)
         value_edit.editing_changed = lambda is_editing, c=new_row_container: self._on_editing_state_changed(c, is_editing)
         
+        # Handle Esc on empty field
+        def on_key_escape():
+            k = row_data['key_le'].text().strip()
+            v = row_data['val_le'].text().strip()
+            if not k and not v:
+                self._remove_new_field_row(row_data)
+        
+        def on_value_escape():
+            k = row_data['key_le'].text().strip()
+            v = row_data['val_le'].text().strip()
+            if not k and not v:
+                self._remove_new_field_row(row_data)
+        
+        key_edit.on_escape_empty = on_key_escape
+        value_edit.on_escape_empty = on_value_escape
+        
         self.form_layout.insertRow(self.form_layout.rowCount() - 1, new_row_container)
         self.new_rows.append(row_data)
         self._check_for_changes()
@@ -243,26 +290,62 @@ class SecretDetailWidget(QWidget):
 
     def _remove_new_field_row(self, row_data):
         if row_data in self.new_rows:
+            # Get index before removing
+            row_index = self.new_rows.index(row_data)
             self.new_rows.remove(row_data)
+            
             # Delete container (which contains the widget)
             if 'container' in row_data:
                 row_data['container'].deleteLater()
             else:
                 row_data['widget'].deleteLater()
+            
             self._check_for_changes()
             self.state_changed.emit("normal")
+            
+            # Restore focus after deletion
+            if self.new_rows:
+                # Focus on previous or same index
+                target_index = min(row_index, len(self.new_rows) - 1)
+                QTimer.singleShot(10, lambda: self.new_rows[target_index]['key_le'].setFocus())
+            elif self.field_rows:
+                # Focus on last existing field
+                QTimer.singleShot(10, lambda: self._focus_field(len(self.field_rows) - 1))
+    
+    def _highlight_field_error(self, row_data, field_type):
+        """Highlight a field with red border to indicate error"""
+        if field_type == 'key':
+            row_data['key_le'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+            # Reset after 3 seconds
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row_data, 'key'))
+        elif field_type == 'value':
+            row_data['val_le'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+            # Reset after 3 seconds
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row_data, 'value'))
+    
+    def _reset_field_style(self, row_data, field_type):
+        """Reset field style to normal"""
+        normal_style = "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+        if field_type == 'key' and row_data in self.new_rows:
+            row_data['key_le'].setStyleSheet(normal_style)
+        elif field_type == 'value' and row_data in self.new_rows:
+            row_data['val_le'].setStyleSheet(normal_style)
 
     def _confirm_and_convert_field(self, row_data):
         key = row_data['key_le'].text().strip()
         value = row_data['val_le'].text()
 
         if not key:
+            self._highlight_field_error(row_data, 'key')
             self.show_status("Field name cannot be empty.", "error")
             row_data['key_le'].setFocus()
+            row_data['key_le'].set_editing(True)
             return False
         if not value:
+            self._highlight_field_error(row_data, 'value')
             self.show_status("Field value cannot be empty.", "error")
             row_data['val_le'].setFocus()
+            row_data['val_le'].set_editing(True)
             return False
 
         dialog = ConfirmationDialog(self)
@@ -438,7 +521,37 @@ class SecretDetailWidget(QWidget):
         if not self.is_dirty:
             return
         if self.new_rows:
+            # Check for partially filled fields
+            for row_data in self.new_rows:
+                key = row_data['key_le'].text().strip()
+                value = row_data['val_le'].text().strip()
+                
+                if not key and not value:
+                    # Both empty - focus on key
+                    self.show_status("You have an empty field. Fill it or remove it.", "error")
+                    row_data['key_le'].setFocus()
+                    row_data['key_le'].set_editing(True)
+                    return
+                elif key and not value:
+                    # Only key filled
+                    self._highlight_field_error(row_data, 'value')
+                    self.show_status(f"Field '{key}' is missing a value.", "error")
+                    row_data['val_le'].setFocus()
+                    row_data['val_le'].set_editing(True)
+                    return
+                elif not key and value:
+                    # Only value filled
+                    self._highlight_field_error(row_data, 'key')
+                    self.show_status("Field is missing a name.", "error")
+                    row_data['key_le'].setFocus()
+                    row_data['key_le'].set_editing(True)
+                    return
+            
+            # All fields filled, ask to confirm
             self.show_status("You have unconfirmed fields. Press Enter to confirm them first.", "info")
+            # Focus on first new field
+            if self.new_rows:
+                self.new_rows[0]['key_le'].setFocus()
             return
         dialog = ConfirmationDialog(self)
         if dialog.exec() == QDialog.Accepted:
@@ -543,6 +656,32 @@ class SecretDetailWidget(QWidget):
         key = event.key()
         modifiers = event.modifiers()
 
+        # Check if in new rows
+        focused_widget = self.focusWidget()
+        is_new_row = False
+        for row_data in self.new_rows:
+            if focused_widget is row_data['key_le'] or focused_widget is row_data['val_le']:
+                is_new_row = True
+                break
+        
+        # Handle navigation in new rows (if not in editing mode)
+        if is_new_row:
+            if key == Qt.Key_Escape:
+                self.back_button.click()
+                return
+            
+            # Handle Ctrl hotkeys in new rows
+            if modifiers == Qt.ControlModifier:
+                if key == Qt.Key_S: 
+                    self._prompt_to_save()
+                    return
+                elif key == Qt.Key_N: 
+                    self.add_new_field_row()
+                    return
+            
+            # Don't process other navigation for new rows
+            return
+
         focused_row_index = -1
         for i, row in enumerate(self.field_rows):
             if self.focusWidget() is row['le'] or self.focusWidget() is row['key_le']:
@@ -578,4 +717,5 @@ class SecretDetailWidget(QWidget):
                 elif key == Qt.Key_E: self._enable_editing(row_data['le'])
                 elif key == Qt.Key_T: self._toggle_visibility(row_data['le'], row_data['toggle_btn'])
                 elif key == Qt.Key_D: self._prompt_for_delete(self.current_field_index)
+                elif key == Qt.Key_N: self.add_new_field_row()
                 return
