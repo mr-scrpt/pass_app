@@ -119,7 +119,7 @@ class SecretDetailWidget(QWidget):
         container_layout.setSpacing(12)
 
         label_stack = QStackedWidget()
-        label_stack.setFixedWidth(150)
+        label_stack.setFixedWidth(100)
         label_stack.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         label = QLabel(f"{key}:")
         label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;")

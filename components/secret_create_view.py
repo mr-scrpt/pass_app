@@ -291,7 +291,7 @@ class SecretCreateWidget(QWidget):
             f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;"
         )
         self.resource_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
-        self.resource_label.setFixedWidth(150)
+        self.resource_label.setFixedWidth(100)
         resource_input_layout.addWidget(self.resource_label)
 
         # Resource input
@@ -466,7 +466,7 @@ class SecretCreateWidget(QWidget):
             key_input.setStyleSheet(
                 "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
             )
-            key_input.setFixedWidth(150)
+            key_input.setFixedWidth(100)
             key_input.textChanged.connect(self._check_for_changes)
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
@@ -502,7 +502,7 @@ class SecretCreateWidget(QWidget):
             key_input.setStyleSheet(
                 "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); color: #a6adc8; } QLineEdit:focus { border: 2px solid #89b4fa; }"
             )
-            key_input.setFixedWidth(150)
+            key_input.setFixedWidth(100)
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)

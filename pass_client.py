@@ -133,7 +133,7 @@ class MainWindow(QMainWindow):
             background-color: transparent;
         """)
         self.mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.mode_label.setMinimumWidth(150)
+        self.mode_label.setMinimumWidth(100)
         footer_layout.addWidget(self.mode_label)
 
         # Left spacer
@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
             background-color: transparent;
         """)
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.status_label.setMinimumWidth(200)
+        self.status_label.setMinimumWidth(120)
         footer_layout.addWidget(self.status_label)
 
         main_layout.addWidget(footer_widget)
