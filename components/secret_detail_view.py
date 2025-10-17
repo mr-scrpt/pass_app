@@ -425,8 +425,15 @@ class SecretDetailWidget(QWidget):
 
         row["label"].setText(f"{row['key_le'].text()}:")
         row["label_stack"].setCurrentWidget(row["label"])
+
+        # Exit editing mode on both fields
         row["key_le"].set_editing(False)
         row["le"].set_editing(False)
+
+        # Explicitly clear the container border
+        row["container"].setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
 
         if row["delete_button"]:
             row["delete_button"].deleteLater()
@@ -625,19 +632,39 @@ class SecretDetailWidget(QWidget):
         self.state_changed.emit("edit")
         self.show_status("Editing enabled", "info")
 
+        # Find the container for this line_edit to reset styles properly
+        container = None
+        for row in self.field_rows:
+            if row["le"] == line_edit:
+                container = row["container"]
+                break
+
         # Set callback to emit state change when editing ends
         def on_editing_changed(is_editing):
             if not is_editing:
+                # Reset visual styles when exiting editing mode
+                if container:
+                    self._on_editing_state_changed(container, False)
                 self.state_changed.emit("normal")
 
         line_edit.editing_changed = on_editing_changed
 
     def _cancel_editing(self, line_edit):
+        found_row = None
         for row in self.field_rows:
             if row["le"] == line_edit:
                 line_edit.setText(row["orig_val"])
+                found_row = row
                 break
+
         line_edit.set_editing(False)
+
+        # Explicitly clear the container border
+        if found_row:
+            found_row["container"].setStyleSheet(
+                "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+            )
+
         self.show_status("Edit cancelled", "info")
         self._check_for_changes()
         self.state_changed.emit("normal")
@@ -696,10 +723,11 @@ class SecretDetailWidget(QWidget):
                     "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.05); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; } QLineEdit:!read-only { background-color: rgba(255, 255, 255, 0.1); }"
                 )
         else:
-            # Blue border for navigation mode
+            # Exit editing mode - always clear border first
             container.setStyleSheet(
-                "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
+                "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
             )
+
             # Restore normal styling
             if row_data:
                 # Blue color for label text
