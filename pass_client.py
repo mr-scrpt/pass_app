@@ -97,7 +97,8 @@ class MainWindow(QMainWindow):
         self.namespace_resources = {}  # {namespace: [resource1, resource2, ...]}
         self.current_selected_item = None
         self.setWindowTitle("Pass Keyboard Control")
-        self.resize(800, 600)
+        self.resize(720, 720)
+        self.setMaximumSize(720, 720)
 
         self.hotkey_manager = HotkeyManager()
 
