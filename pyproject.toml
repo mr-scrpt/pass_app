@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pass-keyboard-control"
-version = "1.0.3"
+version = "1.0.4"
 description = "AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control"
 readme = "README.md"
 requires-python = ">=3.8"
