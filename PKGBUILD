@@ -24,16 +24,16 @@ makedepends=(
     'python-installer'
     'python-wheel'
 )
-source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
-sha256sums=('SKIP')  # Заменить на реальный sha256sum после создания релиза
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/mr-scrpt/pass_app/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('fee5ab1ace1cf1d60192ffd264346a0223662948fabe9d096213ee015920a16c')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd "pass_app-${pkgver}"
     python -m build --wheel --no-isolation
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
+    cd "pass_app-${pkgver}"
     python -m installer --destdir="$pkgdir" dist/*.whl
     
     # Install desktop file
