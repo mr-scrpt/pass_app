@@ -27,7 +27,7 @@ makedepends=(
     'python-setuptools-scm'
 )
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/mr-scrpt/pass_app/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('e775dcabd8889ad5f37269fbe5f7c3e1bea13e3ec3ee58115af891c520c6555e')
+sha256sums=('07ab5aa736283edaa312077389922a1512d57dba8f0ac9d3f73f20024bc90d2a')
 
 build() {
     cd "pass_app-${pkgver}"
