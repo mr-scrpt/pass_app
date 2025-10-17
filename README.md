@@ -25,41 +25,16 @@ A modern, keyboard-driven GUI application for the Unix password manager `pass` w
 
 ## Installation
 
-### Option 1: Install with pip (recommended)
+**Quick install:**
 
 ```bash
-# Install from source
 pip install .
-
-# Or install in development mode
-pip install -e .
-
-# Run the application
 pass-kb
 ```
 
-### Option 2: Run from source
+For detailed installation instructions, troubleshooting, and distribution options, see **[INSTALL.md](INSTALL.md)**.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python pass_client.py
-```
-
-### Option 3: Build standalone executable
-
-```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build executable
-./build_executable.sh
-
-# Run
-./dist/pass-kb
-```
+For publishing to AUR and other systems, see **[DISTRIBUTION_GUIDE.md](DISTRIBUTION_GUIDE.md)**.
 
 ## Usage
 
@@ -78,9 +53,9 @@ Press **F1** or **Ctrl+H** to view all available shortcuts.
 #### Detail View
 - `Up/Down` - Navigate fields
 - `Tab` / `Shift+Tab` - Next/Previous field
-- `Enter` - Copy field value
-- `Ctrl+E` - Edit field
-- `Ctrl+Shift+E` - Deep edit (key + value)
+- `Enter` - Edit field value
+- `Ctrl+C` - Copy field value
+- `Ctrl+E` - Deep edit (edit key + value)
 - `Ctrl+T` - Toggle password visibility
 - `Ctrl+N` - Add new field
 - `Ctrl+D` - Delete field
@@ -135,24 +110,10 @@ pytest
 
 ## Building Distribution
 
-### Build Python Package
-
-```bash
-# Build wheel and source distribution
-python -m build
-
-# Install locally
-pip install dist/pass_cli_with_keyboard_total_control-1.0.0-py3-none-any.whl
-```
-
-### Build Executable
-
-```bash
-# Linux
-./build_executable.sh
-
-# The executable will be in dist/pass-kb
-```
+See **[DISTRIBUTION_GUIDE.md](DISTRIBUTION_GUIDE.md)** for:
+- Building packages for AUR
+- Creating releases
+- Publishing to package managers
 
 ## Contributing
 
