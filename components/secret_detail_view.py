@@ -126,6 +126,7 @@ class SecretDetailWidget(QWidget):
         label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
 
         key_le = StyledLineEdit(key)
+        key_le.set_editing(False)  # Not editable by default (only in deep edit mode)
         key_le.setStyleSheet(
             "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
         )
@@ -426,20 +427,26 @@ class SecretDetailWidget(QWidget):
         row["label"].setText(f"{row['key_le'].text()}:")
         row["label_stack"].setCurrentWidget(row["label"])
 
+        # Mark as no longer deep editing BEFORE calling set_editing
+        row["is_deep_editing"] = False
+
         # Exit editing mode on both fields
         row["key_le"].set_editing(False)
         row["le"].set_editing(False)
 
-        # Explicitly clear the container border
-        row["container"].setStyleSheet(
-            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
-        )
+        # Explicitly make fields readonly
+        row["key_le"].setReadOnly(True)
+        row["le"].setReadOnly(True)
 
+        # Explicitly reset all styles via _on_editing_state_changed
+        self._on_editing_state_changed(row["container"], False)
+
+        # Delete the delete button (hide immediately and schedule deletion)
         if row["delete_button"]:
+            row["delete_button"].setVisible(False)
             row["delete_button"].deleteLater()
             row["delete_button"] = None
 
-        row["is_deep_editing"] = False
         self._check_for_changes()
         self.state_changed.emit("normal")
         QTimer.singleShot(0, lambda: self._focus_field(index))
@@ -802,7 +809,15 @@ class SecretDetailWidget(QWidget):
             row_data = self.field_rows[focused_row_index]
 
             if key == Qt.Key_Escape:
-                self.back_button.click()
+                # Check if in deep edit mode
+                if row_data["is_deep_editing"]:
+                    self._handle_esc_in_deep_edit(focused_row_index)
+                # Check if in normal editing mode
+                elif row_data["le"]._is_editing:
+                    self._cancel_editing(row_data["le"])
+                # Otherwise go back
+                else:
+                    self.back_button.click()
                 return
 
             if key in (Qt.Key_Return, Qt.Key_Enter):

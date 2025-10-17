@@ -40,13 +40,10 @@ class StyledLineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         if self._is_editing:
-            # Esc - exit editing mode (and maybe delete if empty)
+            # Esc - let parent handle it (for deep edit mode, etc.)
+            # Don't handle Esc ourselves, emit navigation signal
             if event.key() == Qt.Key_Escape:
-                # Check if empty and call callback
-                if not self.text().strip() and self.on_escape_empty:
-                    self.on_escape_empty()
-                self.set_editing(False)
-                event.accept()
+                self.navigation.emit(event)
                 return
             # Enter - exit editing mode
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
