@@ -5,7 +5,7 @@ import sys
 
 
 def get_backend_command(command_name):
-    python_executable = os.path.join(os.path.dirname(__file__), ".venv", "bin", "python")
+    python_executable = sys.executable
     backend_script = os.path.join(os.path.dirname(__file__), "pass_backend.py")
     return [python_executable, backend_script, command_name]
 
