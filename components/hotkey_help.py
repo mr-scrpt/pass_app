@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy
 
 from ui_theme import extra
 
@@ -10,10 +10,14 @@ class HotkeyHelpWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 6, 15, 6)
         layout.setSpacing(20)
+        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         
         # Category label (Navigation / Actions)
         self.category_label = QLabel(category)
         self.category_label.setMinimumWidth(80)
+        self.category_label.setMaximumWidth(100)
+        self.category_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.category_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
         if category:
             # Dark colors for light background
             category_color = "#1e3a8a" if "Navigation" in category else "#166534"
@@ -25,7 +29,9 @@ class HotkeyHelpWidget(QWidget):
         # Content label
         self.content_label = QLabel(text)
         self.content_label.setStyleSheet(f"color: #1e1e2e; font-size: 12px;")
-        self.content_label.setWordWrap(False)
+        self.content_label.setWordWrap(True)
+        self.content_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.content_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addWidget(self.content_label, stretch=1)
 
     def setText(self, text):
