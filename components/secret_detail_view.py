@@ -486,13 +486,23 @@ class SecretDetailWidget(QWidget):
             self._exit_deep_edit_mode(index, reset_values=True)
 
     def _handle_esc_in_new_field(self, row_data):
-        key_text = row_data["key_le"].text()
-        val_text = row_data["val_le"].text()
+        key_text = row_data["key_le"].text().strip()
+        val_text = row_data["val_le"].text().strip()
+
+        # If both fields are empty, remove the row and return to navigation
         if not key_text and not val_text:
+            # Exit editing mode first
+            row_data["key_le"].set_editing(False)
+            row_data["val_le"].set_editing(False)
+            # Remove the empty row
             self._remove_new_field_row(row_data)
-            self._focus_field(len(self.field_rows) - 1)
+            # Focus on last existing field
+            if self.field_rows:
+                self._focus_field(len(self.field_rows) - 1)
+            self.state_changed.emit("normal")
             return
 
+        # If there's data, ask what to do
         dialog = ConfirmationDialog(
             self,
             text="You have an unconfirmed new field.",
@@ -505,7 +515,13 @@ class SecretDetailWidget(QWidget):
         if result == QDialog.Accepted:
             self._confirm_and_convert_field(row_data)
         elif result == dialog.third_button_role:
+            # Exit editing mode before removing
+            row_data["key_le"].set_editing(False)
+            row_data["val_le"].set_editing(False)
             self._remove_new_field_row(row_data)
+            if self.field_rows:
+                self._focus_field(len(self.field_rows) - 1)
+            self.state_changed.emit("normal")
 
     def _prompt_for_delete(self, index):
         if not (0 <= index < len(self.field_rows)):
@@ -780,10 +796,16 @@ class SecretDetailWidget(QWidget):
                 is_new_row = True
                 break
 
-        # Handle navigation in new rows (if not in editing mode)
+        # Handle navigation in new rows
         if is_new_row:
             if key == Qt.Key_Escape:
-                self.back_button.click()
+                # Check if in editing mode
+                if row_data["key_le"]._is_editing or row_data["val_le"]._is_editing:
+                    # Exit editing mode and handle empty field
+                    self._handle_esc_in_new_field(row_data)
+                else:
+                    # Already in navigation mode - go back
+                    self.back_button.click()
                 return
 
             # Handle Ctrl hotkeys in new rows

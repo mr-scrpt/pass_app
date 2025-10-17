@@ -656,6 +656,31 @@ class SecretCreateWidget(QWidget):
             # Emit state change back to normal create mode
             self.state_changed.emit("create")
 
+    def _handle_esc_in_new_field(self, row_data):
+        """Handle Esc in new field - exit editing and remove if empty"""
+        key_text = row_data["key_input"].text().strip()
+        val_text = row_data["value_input"].text().strip()
+
+        # If both fields are empty, exit editing and remove the row
+        if not key_text and not val_text:
+            # Exit editing mode
+            row_data["key_input"].set_editing(False)
+            row_data["value_input"].set_editing(False)
+            # Remove the empty row
+            self._delete_field_row(row_data)
+            # Focus on previous field if available
+            if self.field_rows:
+                self.field_rows[-1]["value_input"].setFocus()
+            else:
+                self.resource_input.setFocus()
+            self.state_changed.emit("create")
+            return
+
+        # If there's data, just exit editing mode (keep the field)
+        row_data["key_input"].set_editing(False)
+        row_data["value_input"].set_editing(False)
+        self.state_changed.emit("create")
+
     def _highlight_field_error(self, row, field_type):
         """Highlight a field with red border to indicate error"""
         if field_type == "key":
@@ -1120,9 +1145,19 @@ class SecretCreateWidget(QWidget):
         key = event.key()
         modifiers = event.modifiers()
 
-        # Navigation mode:
-        # Esc - go back (with confirmation if dirty)
+        # Esc - check if in editing mode for new field
         if key == Qt.Key_Escape:
+            focused = self.focusWidget()
+            if isinstance(focused, StyledLineEdit) and focused._is_editing:
+                # Check if this is a new field (key_editable)
+                for row in self.field_rows:
+                    if focused == row["key_input"] or focused == row["value_input"]:
+                        if row["key_editable"]:
+                            # This is a new field in editing mode
+                            self._handle_esc_in_new_field(row)
+                            return
+                        break
+            # Not in editing mode of new field - go back
             self._handle_back()
             return
 
