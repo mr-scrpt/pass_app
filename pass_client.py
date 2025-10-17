@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
-        self.nav_help_widget = HotkeyHelpWidget(category="Navigation")
+        self.nav_help_widget = HotkeyHelpWidget(category="Nav")
         self.action_help_widget = HotkeyHelpWidget(category="Actions")
         main_layout.addWidget(self.nav_help_widget)
         main_layout.addWidget(self.action_help_widget)
@@ -338,62 +338,62 @@ class MainWindow(QMainWindow):
 
         help_texts = {
             "search": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Up/Down - Navigate  |  Enter - View",
                 "category_action": "Actions",
                 "action": "Ctrl+N - Create  |  Ctrl+R - Sync  |  Ctrl+G - Generate password  |  Ctrl+Shift+G - Advanced",
             },
             "normal": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Up/Down - Fields  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
                 "action": "Enter - Edit  |  Ctrl+C - Copy  |  Ctrl+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save",
             },
             "edit": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Focus locked",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Esc - Cancel  |  Tab - Navigate",
             },
             "deep_edit": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Ctrl+D - Delete  |  Esc - Cancel",
             },
             "add_new": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Tab - Switch fields  |  Shift+Tab - Backward",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+N - Add Another",
             },
             "create": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Up/Down - Sections  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
                 "action": "Enter - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate",
             },
             "create_tags": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Up/Down - Navigate tags  |  Tab - Next tag  |  Shift+Tab - Previous  |  Esc - Exit tags",
                 "category_action": "Actions",
                 "action": "Enter - Select/deselect tag  |  Space - Toggle  |  Ctrl+T - Add new namespace",
             },
             "create_editing": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Focus locked on editing field  |  Tab - Navigate within input",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+G - Generate (if password)",
             },
             "create_new_field": {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
                 "category_action": "Actions",
                 "action": "Enter - Confirm field  |  Esc - Delete empty  |  Ctrl+N - Add another",
             },
         }
         texts = help_texts.get(
-            state, {"category_nav": "Navigation", "nav": "", "category_action": "Actions", "action": ""}
+            state, {"category_nav": "Nav", "nav": "", "category_action": "Actions", "action": ""}
         )
         self.nav_help_widget.update_content(texts["category_nav"], texts["nav"])
         self.action_help_widget.update_content(texts["category_action"], texts["action"])

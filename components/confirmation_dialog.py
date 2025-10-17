@@ -122,14 +122,14 @@ class ConfirmationDialog(QDialog):
         """Return hotkey help text for this dialog"""
         if self.third_button_text:
             return {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Ctrl+S - Save  |  Esc - Cancel",
             }
         else:
             return {
-                "category_nav": "Navigation",
+                "category_nav": "Nav",
                 "nav": "",
                 "category_action": "Actions",
                 "action": "Enter - Confirm  |  Esc - Cancel",

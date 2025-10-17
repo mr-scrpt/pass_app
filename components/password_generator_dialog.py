@@ -20,7 +20,7 @@ class PasswordGeneratorDialog(QDialog):
     def get_hotkey_info():
         """Return hotkey help text for this dialog"""
         return {
-            "category_nav": "Navigation",
+            "category_nav": "Nav",
             "nav": "Up/Down - Navigate fields  |  Left/Right - Adjust length  |  Space - Toggle option",
             "category_action": "Actions",
             "action": "Enter - Copy & close  |  Ctrl+C - Copy  |  Esc - Cancel",
