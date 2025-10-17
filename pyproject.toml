@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "mr-scrpt", email = "mr.scrpt@gmail.com"}
 ]
 keywords = ["password", "manager", "gui", "pass", "gpg", "security", "keyboard", "AI-generated"]
 classifiers = [
@@ -49,10 +49,10 @@ pass-kb = "pass_client:main"
 pass-kb-gui = "pass_client:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pass-keyboard-control"
-Documentation = "https://github.com/yourusername/pass-keyboard-control/wiki"
-Repository = "https://github.com/yourusername/pass-keyboard-control"
-"Bug Tracker" = "https://github.com/yourusername/pass-keyboard-control/issues"
+Homepage = "https://github.com/mr-scrpt/pass-keyboard-control"
+Documentation = "https://github.com/mr-scrpt/pass-keyboard-control/wiki"
+Repository = "https://github.com/mr-scrpt/pass-keyboard-control"
+"Bug Tracker" = "https://github.com/mr-scrpt/pass-keyboard-control/issues"
 
 [tool.setuptools]
 packages = ["components"]

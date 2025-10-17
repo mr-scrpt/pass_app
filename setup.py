@@ -21,9 +21,9 @@ setup(
     description="AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
-    author="Your Name",
-    author_email="your.email@example.com",
-    url="https://github.com/yourusername/pass-keyboard-control",
+    author="mr-scrpt",
+    author_email="mr.scrpt@gmail.com",
+    url="https://github.com/mr-scrpt/pass-keyboard-control",
     license="MIT",
     # Package configuration
     packages=find_packages(),
