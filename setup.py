@@ -17,7 +17,7 @@ def read_file(filename):
 
 setup(
     name="pass-keyboard-control",
-    version="1.0.0",
+    version="1.0.1",
     description="AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
@@ -27,6 +27,16 @@ setup(
     license="MIT",
     # Package configuration
     packages=find_packages(),
+    py_modules=[
+        'pass_client',
+        'pass_backend',
+        'backend_utils',
+        'ui_components',
+        'ui_theme',
+        'utils',
+        'hotkey_manager',
+        'fa_keyboard_icons',
+    ],
     include_package_data=True,
     # Dependencies
     install_requires=[
