@@ -1,5 +1,6 @@
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
 
 class StatusBarWidget(QWidget):
     def __init__(self):
@@ -20,11 +21,11 @@ class StatusBarWidget(QWidget):
             return
 
         color_map = {
-            "success": "#a6e3a1", # Green
-            "error": "#f38ba8",   # Red
-            "info": "#89b4fa"      # Blue
+            "success": "#a6e3a1",  # Green
+            "error": "#f38ba8",  # Red
+            "info": "#89b4fa",  # Blue
         }
-        color = color_map.get(toast_type, "#cdd6f4") # Default to primary text color
+        color = color_map.get(toast_type, "#cdd6f4")  # Default to primary text color
 
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")

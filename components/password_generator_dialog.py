@@ -1,21 +1,20 @@
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
-    QWidget,
-    QVBoxLayout,
     QHBoxLayout,
     QLineEdit,
     QPushButton,
-    QLabel,
-    QCheckBox,
-    QSpinBox
+    QSpinBox,
+    QVBoxLayout,
 )
-from PySide6.QtGui import QKeyEvent
 
-from utils import generate_password
-from fa_keyboard_icons import get_fa_keyboard_icon
 from components.hotkey_help import HotkeyHelpWidget
+from fa_keyboard_icons import get_fa_keyboard_icon
+from utils import generate_password
+
 
 class PasswordGeneratorDialog(QDialog):
     def __init__(self, parent=None, show_status_callback=None):
@@ -47,7 +46,7 @@ class PasswordGeneratorDialog(QDialog):
 
         # Cancel button with ESC icon (red)
         self.cancel_button = QPushButton("  Cancel")
-        self.cancel_button.setIcon(get_fa_keyboard_icon('escape', color='#f38ba8', size=96))
+        self.cancel_button.setIcon(get_fa_keyboard_icon("escape", color="#f38ba8", size=96))
         self.cancel_button.setIconSize(QSize(32, 32))
         self.cancel_button.setMinimumHeight(50)
         self.cancel_button.setStyleSheet("""
@@ -69,10 +68,10 @@ class PasswordGeneratorDialog(QDialog):
                 background-color: rgba(243, 139, 168, 0.35);
             }
         """)
-        
+
         # Copy button with Enter icon (green)
         self.copy_button = QPushButton("  Copy & Close")
-        self.copy_button.setIcon(get_fa_keyboard_icon('enter', color='#a6e3a1', size=96))
+        self.copy_button.setIcon(get_fa_keyboard_icon("enter", color="#a6e3a1", size=96))
         self.copy_button.setIconSize(QSize(32, 32))
         self.copy_button.setMinimumHeight(50)
         self.copy_button.setStyleSheet("""
@@ -101,13 +100,13 @@ class PasswordGeneratorDialog(QDialog):
             self.mixed_case_checkbox,
             self.symbols_checkbox,
             self.cancel_button,
-            self.copy_button
+            self.copy_button,
         ]
         self.current_focus_index = 0
 
         # --- Layout ---
         main_layout = QVBoxLayout(self)
-        
+
         # Password display and length on same line
         password_layout = QHBoxLayout()
         password_layout.addWidget(self.password_display)
@@ -117,24 +116,23 @@ class PasswordGeneratorDialog(QDialog):
         main_layout.addWidget(self.mixed_case_checkbox)
         main_layout.addWidget(self.symbols_checkbox)
         main_layout.addStretch()
-        
+
         # Button layout
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.copy_button)
         main_layout.addLayout(button_layout)
-        
+
         # --- Hotkey Help Widgets ---
         self.nav_help_widget = HotkeyHelpWidget(
             category="Navigation",
-            text="Up/Down - Navigate fields  |  Left/Right - Adjust length  |  Space - Toggle option"
+            text="Up/Down - Navigate fields  |  Left/Right - Adjust length  |  Space - Toggle option",
         )
         main_layout.addWidget(self.nav_help_widget)
-        
+
         self.action_help_widget = HotkeyHelpWidget(
-            category="Actions",
-            text="Enter - Copy & close  |  Ctrl+C - Copy  |  Esc - Cancel"
+            category="Actions", text="Enter - Copy & close  |  Ctrl+C - Copy  |  Esc - Cancel"
         )
         main_layout.addWidget(self.action_help_widget)
 
@@ -156,7 +154,7 @@ class PasswordGeneratorDialog(QDialog):
         password = generate_password(
             length=self.length_spinbox.value(),
             use_mixed_case=self.mixed_case_checkbox.isChecked(),
-            use_symbols=self.symbols_checkbox.isChecked()
+            use_symbols=self.symbols_checkbox.isChecked(),
         )
         self.password_display.setText(password)
 
@@ -164,7 +162,7 @@ class PasswordGeneratorDialog(QDialog):
         """Update focus to current field and select text if applicable"""
         current_widget = self.focusable_fields[self.current_focus_index]
         current_widget.setFocus()
-        
+
         # Select all text in password display
         if current_widget == self.password_display:
             self.password_display.selectAll()
@@ -203,10 +201,10 @@ class PasswordGeneratorDialog(QDialog):
     def eventFilter(self, obj, event):
         """Filter events to intercept arrow keys and special keys before widgets handle them"""
         from PySide6.QtCore import QEvent
-        
+
         if event.type() == QEvent.KeyPress:
             key = event.key()
-            
+
             # Handle arrow keys for navigation and length adjustment
             if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right):
                 if key == Qt.Key_Up:
@@ -218,33 +216,33 @@ class PasswordGeneratorDialog(QDialog):
                 elif key == Qt.Key_Right:
                     self._adjust_length(1)
                 return True  # Event handled, don't propagate
-            
+
             # Handle Enter - always copy and close
             elif key in (Qt.Key_Return, Qt.Key_Enter):
                 self.copy_and_close()
                 return True
-            
+
             # Handle Space - toggle checkboxes only
             elif key == Qt.Key_Space:
                 if isinstance(obj, QCheckBox):
                     self._toggle_current_checkbox()
                     return True
-            
+
             # Handle Ctrl+C
             elif event.modifiers() == Qt.ControlModifier and key == Qt.Key_C:
                 self.copy_to_clipboard()
                 return True
-            
+
             # Handle Escape
             elif key == Qt.Key_Escape:
                 self.reject()
                 return True
-        
+
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event: QKeyEvent):
         key = event.key()
-        
+
         if key == Qt.Key_Escape:
             self.reject()
             event.accept()

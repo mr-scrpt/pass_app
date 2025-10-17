@@ -1,31 +1,27 @@
-from PySide6.QtCore import Qt, Signal, QTimer, QRect, QSize, QPoint, QEvent
+import qtawesome as qta
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QVBoxLayout,
+    QDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
+    QLayout,
     QLineEdit,
-    QTextEdit,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
-    QStackedWidget,
-    QFormLayout,
-    QFrame,
-    QLayout,
-    QDialog,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtGui import QColor
-import qtawesome as qta
 
-from ui_theme import extra
 from components.confirmation_dialog import ConfirmationDialog
 from ui_components import StyledLineEdit
+from ui_theme import extra
 
 
 class FlowLayout(QLayout):
     """Flow layout that wraps items to multiple rows"""
+
     def __init__(self, parent=None, margin=0, spacing=-1):
         super().__init__(parent)
         self._item_list = []
@@ -126,7 +122,15 @@ class FlowLayout(QLayout):
 class SecretCreateWidget(QWidget):
     state_changed = Signal(str)  # Emits the name of the new state
 
-    def __init__(self, back_callback, save_callback, show_status_callback, namespace_colors=None, namespaces=None, namespace_resources=None):
+    def __init__(
+        self,
+        back_callback,
+        save_callback,
+        show_status_callback,
+        namespace_colors=None,
+        namespaces=None,
+        namespace_resources=None,
+    ):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
@@ -141,47 +145,47 @@ class SecretCreateWidget(QWidget):
         self.current_focus_index = 0  # Track current focused element (0 = tags, 1 = resource_input, 2+ = field_rows)
         self.current_tag_index = 0  # Track current focused tag
         self.tags_interaction_mode = False  # Track if in tags interaction mode
-        
+
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setSpacing(0)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Header with back button, title and save button
         header_widget = QWidget()
         header_widget.setStyleSheet(f"background-color: {extra['secondaryColor']}; padding: 12px;")
         header_layout = QHBoxLayout(header_widget)
-        
+
         self.back_button = QPushButton()
-        self.back_button.setIcon(qta.icon('fa5s.arrow-left', color=extra['primaryColor']))
+        self.back_button.setIcon(qta.icon("fa5s.arrow-left", color=extra["primaryColor"]))
         self.back_button.setToolTip("Back to list (Esc)")
         self.back_button.setFixedSize(40, 40)
         self.back_button.clicked.connect(self._handle_back)
         header_layout.addWidget(self.back_button)
-        
+
         self.title_label = QLabel("Create New Resource")
         self.title_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16pt; font-weight: bold;")
         self.title_label.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(self.title_label, stretch=1)
-        
+
         self.save_button = QPushButton()
-        self.save_button.setIcon(qta.icon('fa5s.save', color='#a6e3a1'))
+        self.save_button.setIcon(qta.icon("fa5s.save", color="#a6e3a1"))
         self.save_button.setToolTip("Save new secret (Ctrl+S)")
         self.save_button.setFixedSize(40, 40)
         self.save_button.clicked.connect(self._prompt_to_save)
         header_layout.addWidget(self.save_button)
-        
+
         self.main_layout.addWidget(header_widget)
-        
+
         # Scroll area for the form
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QScrollArea.NoFrame)
-        
+
         self.form_container = QWidget()
         self.form_layout = QVBoxLayout(self.form_container)
         self.form_layout.setSpacing(5)  # Reduce spacing between sections
         self.form_layout.setContentsMargins(20, 10, 20, 20)
-        
+
         # Namespace section: left (tags with scroll) + right (NEW button)
         # Wrapper for border highlight
         tags_section_wrapper = QWidget()
@@ -190,11 +194,11 @@ class SecretCreateWidget(QWidget):
         tags_wrapper_layout = QHBoxLayout(tags_section_wrapper)
         tags_wrapper_layout.setContentsMargins(0, 0, 0, 0)
         tags_wrapper_layout.setSpacing(0)
-        
+
         self.namespace_main_container = QWidget()
         self.namespace_main_container.setStyleSheet("QWidget { background-color: transparent; }")
         self.namespace_main_container.setFocusPolicy(Qt.StrongFocus)
-        
+
         # Override event() to catch Tab before Qt's focus system
         def tags_event_handler(event):
             if event.type() == QEvent.KeyPress:
@@ -207,15 +211,15 @@ class SecretCreateWidget(QWidget):
                 self._handle_tags_keypress(event)
                 return True
             return QWidget.event(self.namespace_main_container, event)
-        
+
         self.namespace_main_container.event = tags_event_handler
-        
+
         # Border indicator for highlight
         self.tags_border_indicator = QWidget()
         self.tags_border_indicator.setFixedWidth(3)
         self.tags_border_indicator.setStyleSheet("background-color: transparent;")
         tags_wrapper_layout.addWidget(self.tags_border_indicator)
-        
+
         # Container for tags
         tags_content_container = QWidget()
         tags_content_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -226,12 +230,12 @@ class SecretCreateWidget(QWidget):
         namespace_main_layout.setSpacing(10)
         namespace_main_layout.setContentsMargins(0, 0, 0, 0)
         tags_content_layout.addLayout(namespace_main_layout)
-        
+
         # Left section: tags with FlowLayout and scroll
         self.tags_container = QWidget()
         self.tags_layout = FlowLayout(self.tags_container, spacing=6)
         self.tags_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Scroll area for tags (up to 3 rows)
         tags_scroll = QScrollArea()
         tags_scroll.setWidgetResizable(True)
@@ -241,9 +245,9 @@ class SecretCreateWidget(QWidget):
         tags_scroll.setWidget(self.tags_container)
         tags_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tags_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
+
         namespace_main_layout.addWidget(tags_scroll, stretch=1)  # Takes all available width
-        
+
         # Right section: NEW button container
         new_button_container = QWidget()
         new_button_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -251,76 +255,84 @@ class SecretCreateWidget(QWidget):
         new_button_layout.setContentsMargins(0, 0, 0, 0)
         new_button_layout.setSpacing(0)
         new_button_layout.setAlignment(Qt.AlignTop)
-        
+
         self.new_namespace_button = QPushButton(" New")
-        self.new_namespace_button.setIcon(qta.icon('fa5s.plus-circle', color='#a6e3a1'))
+        self.new_namespace_button.setIcon(qta.icon("fa5s.plus-circle", color="#a6e3a1"))
         self.new_namespace_button.setStyleSheet(
             "QPushButton { border: none; padding: 4px 8px; color: #a6e3a1; font-size: 11px; font-weight: bold; } "
             "QPushButton:hover { background-color: rgba(166, 227, 161, 0.1); }"
         )
         self.new_namespace_button.clicked.connect(self._add_new_namespace)
         self.new_namespace_button.setCursor(Qt.PointingHandCursor)
-        
+
         new_button_layout.addWidget(self.new_namespace_button)
         namespace_main_layout.addWidget(new_button_container)  # Fixed width on the right
-        
+
         self.namespace_main_container.setLayout(tags_content_layout)
         tags_wrapper_layout.addWidget(self.namespace_main_container, stretch=1)
-        
+
         self.form_layout.addWidget(tags_section_wrapper)
-        
+
         # Resource name input with label (like form fields)
         self.resource_input_container = QWidget()
         self.resource_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        self.resource_input_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
         resource_input_layout = QHBoxLayout(self.resource_input_container)
         resource_input_layout.setContentsMargins(0, 0, 0, 0)
         resource_input_layout.setSpacing(12)
-        
+
         # Label for resource name
         resource_label = QLabel("Resource:")
-        resource_label.setStyleSheet(f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;")
+        resource_label.setStyleSheet(
+            f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;"
+        )
         resource_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
         resource_label.setFixedWidth(150)
         resource_input_layout.addWidget(resource_label)
-        
+
         # Resource input
         self.resource_input = StyledLineEdit()
         self.resource_input.setPlaceholderText("Enter resource name")
-        self.resource_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        self.resource_input.setStyleSheet(
+            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+        )
         self.resource_input.textChanged.connect(self._check_for_changes)
         self.resource_input.navigation.connect(self._handle_navigation)
         self.resource_input.focusInEvent = lambda e: self._on_resource_focus_in(e)
         self.resource_input.focusOutEvent = lambda e: self._on_resource_focus_out(e)
         # Track editing state changes
-        self.resource_input.editing_changed = lambda is_editing: self._on_editing_state_changed(self.resource_input_container, is_editing)
+        self.resource_input.editing_changed = lambda is_editing: self._on_editing_state_changed(
+            self.resource_input_container, is_editing
+        )
         # Esc on empty field - do nothing (don't exit page, just exit editing mode)
         self.resource_input.on_escape_empty = lambda: None
         resource_input_layout.addWidget(self.resource_input, stretch=1)
-        
+
         self.form_layout.addWidget(self.resource_input_container)
-        
+
         # Separator (thinner)
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet(f"background-color: {extra['primaryColor']}; opacity: 0.3;")
         self.form_layout.addWidget(separator)
-        
+
         # Fields form container
         self.fields_form_layout = QFormLayout()
         self.fields_form_layout.setSpacing(5)  # Reduce spacing like on detail page
         self.fields_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self.fields_form_layout.setContentsMargins(0, 0, 0, 0)
         self.form_layout.addLayout(self.fields_form_layout)
-        
+
         scroll_area.setWidget(self.form_container)
         self.main_layout.addWidget(scroll_area)
-        
+
         # Initialize with default secret field
         self._initialize_default_field()
         self._add_add_new_field_button()
         self._populate_namespace_tags()
-        
+
         self.state_changed.emit("create")
 
     def _populate_namespace_tags(self):
@@ -329,11 +341,11 @@ class SecretCreateWidget(QWidget):
         for button in self.namespace_buttons:
             button.deleteLater()
         self.namespace_buttons.clear()
-        
+
         # Add existing namespace tags
         for ns in self.namespaces:
-            self._add_namespace_tag(ns, self.namespace_colors.get(ns, extra['primaryColor']))
-    
+            self._add_namespace_tag(ns, self.namespace_colors.get(ns, extra["primaryColor"]))
+
     def _add_namespace_tag(self, namespace, color):
         """Add a single namespace tag button"""
         tag_button = QPushButton(namespace)
@@ -368,33 +380,33 @@ class SecretCreateWidget(QWidget):
         # Add to flow layout
         self.tags_layout.addWidget(tag_button)
         self.namespace_buttons.append(tag_button)
-    
+
     def _hex_to_rgb(self, hex_color):
         """Convert hex color to RGB string for rgba()"""
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        hex_color = hex_color.lstrip("#")
+        r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
         return f"{r}, {g}, {b}"
-    
+
     def _select_namespace(self, namespace, button):
         """Select a namespace"""
         # Uncheck all other buttons
         for btn in self.namespace_buttons:
             if btn != button and btn.isCheckable():
                 btn.setChecked(False)
-        
+
         # Check the selected button
         button.setChecked(True)
-        
+
         # Update selected namespace
         self.selected_namespace = namespace
-        
+
         self._check_for_changes()
         self._update_tag_highlights()  # Update visual state after selection
-    
+
     def _add_new_namespace(self):
         """Add a new namespace"""
         from PySide6.QtWidgets import QInputDialog
-        
+
         text, ok = QInputDialog.getText(self, "New Namespace", "Enter namespace name:")
         if ok and text.strip():
             namespace = text.strip()
@@ -409,23 +421,24 @@ class SecretCreateWidget(QWidget):
             else:
                 # Add to the list
                 self.namespaces.append(namespace)
-                
+
                 # Assign a color from the palette
                 from ui_theme import CATPPUCCIN_COLORS
+
                 color_index = len(self.namespace_colors) % len(CATPPUCCIN_COLORS)
                 color = CATPPUCCIN_COLORS[color_index]
                 self.namespace_colors[namespace] = color
-                
+
                 # Repopulate tags
                 self._populate_namespace_tags()
-                
+
                 # Select the new namespace
                 for btn in self.namespace_buttons:
                     if btn.isCheckable() and btn.text() == namespace:
                         btn.setChecked(True)
                         self._select_namespace(namespace, btn)
                         break
-                
+
                 self.show_status(f"Namespace '{namespace}' created.", "success")
 
     def _initialize_default_field(self):
@@ -436,68 +449,82 @@ class SecretCreateWidget(QWidget):
         """Add a field row to the form"""
         row_container = QWidget()
         row_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        row_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        row_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
         container_layout = QHBoxLayout(row_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(12)
-        row_container.setProperty('row_container', True)  # Mark as navigable
-        
+        row_container.setProperty("row_container", True)  # Mark as navigable
+
         # Key input
         if key_editable:
             key_input = StyledLineEdit(key)
             key_input.setPlaceholderText("Field Name")
-            key_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+            key_input.setStyleSheet(
+                "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+            )
             key_input.setFixedWidth(150)
             key_input.textChanged.connect(self._check_for_changes)
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
             # Track editing state changes
-            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
+            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(
+                c, is_editing
+            )
+
             # Handle Esc on empty field - check if whole row is empty and delete
             def on_key_escape():
                 # Store reference before checking
                 row_to_check = None
                 row_index = -1
                 for i, r in enumerate(self.field_rows):
-                    if r.get('key_input') == key_input:
+                    if r.get("key_input") == key_input:
                         row_to_check = r
                         row_index = i
                         break
-                if row_to_check and row_to_check['key_editable']:
-                    k = row_to_check['key_input'].text().strip()
-                    v = row_to_check['value_input'].text().strip()
+                if row_to_check and row_to_check["key_editable"]:
+                    k = row_to_check["key_input"].text().strip()
+                    v = row_to_check["value_input"].text().strip()
                     if not k and not v:
                         # Delete the row
                         self._delete_field_row(row_to_check)
                         # Set focus to previous field or resource_input
                         QTimer.singleShot(10, lambda: self._focus_after_delete(row_index))
+
             key_input.on_escape_empty = on_key_escape
         else:
             key_input = StyledLineEdit(key)
             key_input.set_editing(False)
-            key_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); color: #a6adc8; } QLineEdit:focus { border: 2px solid #89b4fa; }")
+            key_input.setStyleSheet(
+                "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); color: #a6adc8; } QLineEdit:focus { border: 2px solid #89b4fa; }"
+            )
             key_input.setFixedWidth(150)
             key_input.navigation.connect(self._handle_navigation)
             key_input.focusInEvent = lambda e, c=row_container: self._on_field_focus_in(e, c)
             key_input.focusOutEvent = lambda e, c=row_container: self._on_field_focus_out(e, c)
             # Track editing state changes (even for non-editable)
-            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
+            key_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(
+                c, is_editing
+            )
             # For non-editable key (secret field), just exit editing mode
             key_input.on_escape_empty = lambda: None
-        
+
         container_layout.addWidget(key_input)
-        
+
         # Value input
         value_widget = QWidget()
         value_widget.setStyleSheet("border: none;")
         value_layout = QHBoxLayout(value_widget)
         value_layout.setContentsMargins(0, 0, 0, 0)
         value_layout.setSpacing(8)
-        
+
         value_input = StyledLineEdit(value)
         value_input.setPlaceholderText("Field Value")
-        value_input.setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }")
+        value_input.setStyleSheet(
+            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+        )
         if is_secret:
             value_input.setEchoMode(QLineEdit.Password)
         value_input.textChanged.connect(self._check_for_changes)
@@ -508,67 +535,71 @@ class SecretCreateWidget(QWidget):
         value_input.editing_changed = lambda is_editing, c=row_container: self._on_editing_state_changed(c, is_editing)
         # Handle Esc on empty field - check if whole row is empty and delete (only for editable fields)
         if key_editable:
+
             def on_value_escape():
                 row_to_check = None
                 row_index = -1
                 for i, r in enumerate(self.field_rows):
-                    if r.get('value_input') == value_input:
+                    if r.get("value_input") == value_input:
                         row_to_check = r
                         row_index = i
                         break
-                if row_to_check and row_to_check['key_editable']:
-                    k = row_to_check['key_input'].text().strip()
-                    v = row_to_check['value_input'].text().strip()
+                if row_to_check and row_to_check["key_editable"]:
+                    k = row_to_check["key_input"].text().strip()
+                    v = row_to_check["value_input"].text().strip()
                     if not k and not v:
                         # Delete the row
                         self._delete_field_row(row_to_check)
                         # Set focus to previous field or resource_input
                         QTimer.singleShot(10, lambda: self._focus_after_delete(row_index))
+
             value_input.on_escape_empty = on_value_escape
         else:
             # For non-editable fields (like secret), just exit editing mode
             value_input.on_escape_empty = lambda: None
         value_layout.addWidget(value_input, stretch=1)
-        
+
         # Toggle visibility button
         toggle_button = QPushButton()
-        toggle_icon = 'fa5s.eye' if is_secret else 'fa5s.eye-slash'
-        toggle_button.setIcon(qta.icon(toggle_icon, color=extra['primaryTextColor']))
+        toggle_icon = "fa5s.eye" if is_secret else "fa5s.eye-slash"
+        toggle_button.setIcon(qta.icon(toggle_icon, color=extra["primaryTextColor"]))
         toggle_button.setToolTip("Toggle Visibility (Ctrl+T)")
         toggle_button.setFixedSize(36, 36)
         toggle_button.clicked.connect(lambda: self._toggle_visibility(value_input, toggle_button))
         value_layout.addWidget(toggle_button)
-        
+
         # Delete button (only for non-secret fields)
         if key_editable:
             delete_button = QPushButton()
-            delete_button.setIcon(qta.icon('fa5s.trash-alt', color='#f38ba8'))
+            delete_button.setIcon(qta.icon("fa5s.trash-alt", color="#f38ba8"))
             delete_button.setToolTip("Delete field")
             delete_button.setFixedSize(36, 36)
             delete_button.clicked.connect(lambda: self._delete_field_row(row_data))
             value_layout.addWidget(delete_button)
         else:
             delete_button = None
-        
+
         container_layout.addWidget(value_widget, stretch=1)
         self.fields_form_layout.addRow(row_container)
-        
+
         row_data = {
-            'container': row_container,
-            'key_input': key_input,
-            'value_input': value_input,
-            'toggle_button': toggle_button,
-            'delete_button': delete_button,
-            'key_editable': key_editable,
-            'is_secret': is_secret
+            "container": row_container,
+            "key_input": key_input,
+            "value_input": value_input,
+            "toggle_button": toggle_button,
+            "delete_button": delete_button,
+            "key_editable": key_editable,
+            "is_secret": is_secret,
         }
         self.field_rows.append(row_data)
 
     def _add_add_new_field_button(self):
         """Add the 'Add New Field' button"""
         self.add_field_button = QPushButton(" Add New Field")
-        self.add_field_button.setIcon(qta.icon('fa5s.plus-circle', color='#89b4fa'))
-        self.add_field_button.setStyleSheet("QPushButton { border: none; padding: 10px; } QPushButton:hover { background-color: rgba(137, 180, 250, 0.1); }")
+        self.add_field_button.setIcon(qta.icon("fa5s.plus-circle", color="#89b4fa"))
+        self.add_field_button.setStyleSheet(
+            "QPushButton { border: none; padding: 10px; } QPushButton:hover { background-color: rgba(137, 180, 250, 0.1); }"
+        )
         self.add_field_button.clicked.connect(self._add_new_field)
         self.fields_form_layout.addRow(self.add_field_button)
 
@@ -577,76 +608,80 @@ class SecretCreateWidget(QWidget):
         # Remove highlight from tags section if active
         if self.current_focus_index == 0:
             self._on_tags_focus_out()
-        
+
         # Check if there's already a partially or completely empty field
         for row in self.field_rows:
-            if row['key_editable']:  # Only check editable fields
-                key = row['key_input'].text().strip()
-                value = row['value_input'].text().strip()
-                
+            if row["key_editable"]:  # Only check editable fields
+                key = row["key_input"].text().strip()
+                value = row["value_input"].text().strip()
+
                 # Both empty - focus on key
                 if not key and not value:
-                    row['key_input'].setFocus()
-                    row['key_input'].set_editing(True)
+                    row["key_input"].setFocus()
+                    row["key_input"].set_editing(True)
                     return
-                
+
                 # Only key filled - focus on value and highlight red
                 if key and not value:
-                    self._highlight_field_error(row, 'value')
-                    row['value_input'].setFocus()
-                    row['value_input'].set_editing(True)
+                    self._highlight_field_error(row, "value")
+                    row["value_input"].setFocus()
+                    row["value_input"].set_editing(True)
                     self.show_status(f"Field '{key}' is missing a value.", "error")
                     return
-                
+
                 # Only value filled - focus on key and highlight red
                 if not key and value:
-                    self._highlight_field_error(row, 'key')
-                    row['key_input'].setFocus()
-                    row['key_input'].set_editing(True)
+                    self._highlight_field_error(row, "key")
+                    row["key_input"].setFocus()
+                    row["key_input"].set_editing(True)
                     self.show_status("Field is missing a name.", "error")
                     return
-        
+
         # No empty or partially filled fields found, add new one
         self._add_field_row("", "", is_secret=False, key_editable=True)
         # Focus on the new field's key input
         if self.field_rows:
-            self.field_rows[-1]['key_input'].setFocus()
-            self.field_rows[-1]['key_input'].set_editing(True)
+            self.field_rows[-1]["key_input"].setFocus()
+            self.field_rows[-1]["key_input"].set_editing(True)
         self._check_for_changes()
 
     def _delete_field_row(self, row_data):
         """Delete a field row"""
         if row_data in self.field_rows:
             self.field_rows.remove(row_data)
-            row_data['container'].deleteLater()
+            row_data["container"].deleteLater()
             self._check_for_changes()
             # Emit state change back to normal create mode
             self.state_changed.emit("create")
-    
+
     def _highlight_field_error(self, row, field_type):
         """Highlight a field with red border to indicate error"""
-        if field_type == 'key':
-            row['key_input'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+        if field_type == "key":
+            row["key_input"].setStyleSheet(
+                "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }"
+            )
             # Reset after 3 seconds
-            QTimer.singleShot(3000, lambda: self._reset_field_style(row, 'key'))
-        elif field_type == 'value':
-            row['value_input'].setStyleSheet("QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }")
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row, "key"))
+        elif field_type == "value":
+            row["value_input"].setStyleSheet(
+                "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f38ba8; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #f38ba8; }"
+            )
             # Reset after 3 seconds
-            QTimer.singleShot(3000, lambda: self._reset_field_style(row, 'value'))
-    
+            QTimer.singleShot(3000, lambda: self._reset_field_style(row, "value"))
+
     def _reset_field_style(self, row, field_type):
         """Reset field style to normal"""
         normal_style = "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
-        if field_type == 'key' and row in self.field_rows:
-            row['key_input'].setStyleSheet(normal_style)
-        elif field_type == 'value' and row in self.field_rows:
-            row['value_input'].setStyleSheet(normal_style)
-    
+        if field_type == "key" and row in self.field_rows:
+            row["key_input"].setStyleSheet(normal_style)
+        elif field_type == "value" and row in self.field_rows:
+            row["value_input"].setStyleSheet(normal_style)
+
     def _focus_after_delete(self, deleted_index):
         """Restore focus after deleting a field"""
         # Emit state change back to normal create mode
         self.state_changed.emit("create")
-        
+
         # If there are still fields, focus on the previous one
         if self.field_rows:
             # Try to focus on the field at the same index (or previous if last was deleted)
@@ -654,12 +689,12 @@ class SecretCreateWidget(QWidget):
             if target_index >= 0:
                 # Find the first editable field starting from target
                 for i in range(len(self.field_rows) - 1, -1, -1):
-                    if self.field_rows[i]['key_editable']:
-                        self.field_rows[i]['value_input'].setFocus()
+                    if self.field_rows[i]["key_editable"]:
+                        self.field_rows[i]["value_input"].setFocus()
                         return
                 # If no editable fields found, focus on last field
                 if self.field_rows:
-                    self.field_rows[-1]['value_input'].setFocus()
+                    self.field_rows[-1]["value_input"].setFocus()
                     return
         # No fields left, focus on resource_input
         self.resource_input.setFocus()
@@ -668,10 +703,10 @@ class SecretCreateWidget(QWidget):
         """Toggle password visibility"""
         if line_edit.echoMode() == QLineEdit.Password:
             line_edit.setEchoMode(QLineEdit.Normal)
-            button.setIcon(qta.icon('fa5s.eye-slash', color=extra['primaryTextColor']))
+            button.setIcon(qta.icon("fa5s.eye-slash", color=extra["primaryTextColor"]))
         else:
             line_edit.setEchoMode(QLineEdit.Password)
-            button.setIcon(qta.icon('fa5s.eye', color=extra['primaryTextColor']))
+            button.setIcon(qta.icon("fa5s.eye", color=extra["primaryTextColor"]))
 
     def _check_for_changes(self):
         """Check if there are unsaved changes"""
@@ -679,13 +714,13 @@ class SecretCreateWidget(QWidget):
         has_data = bool(self.selected_namespace or self.resource_input.text().strip())
         for row in self.field_rows:
             # Check both key and value for editable fields
-            if row['key_editable']:
-                if row['key_input'].text().strip() or row['value_input'].text().strip():
+            if row["key_editable"]:
+                if row["key_input"].text().strip() or row["value_input"].text().strip():
                     has_data = True
                     break
             else:
                 # For non-editable fields (like secret), just check value
-                if row['value_input'].text().strip():
+                if row["value_input"].text().strip():
                     has_data = True
                     break
         self.is_dirty = has_data
@@ -698,7 +733,7 @@ class SecretCreateWidget(QWidget):
                 text="You have unsaved changes.",
                 confirm_text="Discard",
                 cancel_text="Cancel",
-                third_button_text="Save"
+                third_button_text="Save",
             )
             result = dialog.exec()
             if result == QDialog.Rejected:  # Cancel
@@ -713,7 +748,7 @@ class SecretCreateWidget(QWidget):
         """Prompt to save the new secret"""
         namespace = self.selected_namespace
         resource = self.resource_input.text().strip()
-        
+
         # Validation
         if not namespace:
             self.show_status("Please select a namespace.", "error")
@@ -722,47 +757,47 @@ class SecretCreateWidget(QWidget):
             self._on_tags_focus_in()
             self._enter_tags_interaction_mode()
             return
-        
+
         if not resource:
             self.show_status("Resource name cannot be empty.", "error")
             self.resource_input.setFocus()
             self.resource_input.set_editing(True)
             return
-        
+
         # Check if secret field has a value
         secret_value = ""
         for row in self.field_rows:
-            if not row['key_editable']:  # This is the secret field
-                secret_value = row['value_input'].text()
+            if not row["key_editable"]:  # This is the secret field
+                secret_value = row["value_input"].text()
                 break
-        
+
         if not secret_value:
             self.show_status("Secret value cannot be empty.", "error")
             for row in self.field_rows:
-                if not row['key_editable']:
-                    row['value_input'].setFocus()
-                    row['value_input'].set_editing(True)
+                if not row["key_editable"]:
+                    row["value_input"].setFocus()
+                    row["value_input"].set_editing(True)
                     break
             return
-        
+
         # Validate other fields - both key and value must be filled or both empty
         for row in self.field_rows:
-            if row['key_editable']:  # Skip the secret field
-                key = row['key_input'].text().strip()
-                value = row['value_input'].text().strip()
+            if row["key_editable"]:  # Skip the secret field
+                key = row["key_input"].text().strip()
+                value = row["value_input"].text().strip()
                 if key and not value:
-                    self._highlight_field_error(row, 'value')
+                    self._highlight_field_error(row, "value")
                     self.show_status(f"Field '{key}' has no value.", "error")
-                    row['value_input'].setFocus()
-                    row['value_input'].set_editing(True)
+                    row["value_input"].setFocus()
+                    row["value_input"].set_editing(True)
                     return
                 if value and not key:
-                    self._highlight_field_error(row, 'key')
+                    self._highlight_field_error(row, "key")
                     self.show_status("Field name cannot be empty.", "error")
-                    row['key_input'].setFocus()
-                    row['key_input'].set_editing(True)
+                    row["key_input"].setFocus()
+                    row["key_input"].set_editing(True)
                     return
-        
+
         # Check if resource already exists in this namespace
         if namespace in self.namespace_resources:
             if resource in self.namespace_resources[namespace]:
@@ -771,7 +806,7 @@ class SecretCreateWidget(QWidget):
                 self.resource_input.set_editing(True)
                 self.resource_input.selectAll()
                 return
-        
+
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText(f"Create secret '[{namespace}] {resource}'?")
         if dialog.exec() == QDialog.Accepted:
@@ -781,26 +816,26 @@ class SecretCreateWidget(QWidget):
         """Save the new secret"""
         namespace = self.selected_namespace
         resource = self.resource_input.text().strip()
-        
+
         # Build content
         content_lines = []
-        
+
         # First line is always the secret value
         for row in self.field_rows:
-            if not row['key_editable']:  # This is the secret field
-                content_lines.append(row['value_input'].text())
+            if not row["key_editable"]:  # This is the secret field
+                content_lines.append(row["value_input"].text())
                 break
-        
+
         # Add other fields
         for row in self.field_rows:
-            if row['key_editable']:
-                key = row['key_input'].text().strip()
-                value = row['value_input'].text()
+            if row["key_editable"]:
+                key = row["key_input"].text().strip()
+                value = row["value_input"].text()
                 if key and value:
                     content_lines.append(f"{key}: {value}")
-        
+
         final_content = "\n".join(content_lines)
-        
+
         result = self.save_callback(namespace, resource, final_content)
         if result and result.get("status") == "success":
             self.show_status("Secret created successfully!", "success")
@@ -813,27 +848,27 @@ class SecretCreateWidget(QWidget):
         """Reset the form to initial state"""
         self.selected_namespace = None
         self.resource_input.clear()
-        
+
         # Uncheck all namespace buttons
         for btn in self.namespace_buttons:
             if btn.isCheckable():
                 btn.setChecked(False)
-        
+
         # Clear all field rows
         for row in self.field_rows:
-            row['container'].deleteLater()
+            row["container"].deleteLater()
         self.field_rows = []
-        
+
         # Remove the add button
         self.fields_form_layout.removeRow(self.add_field_button)
-        
+
         # Re-initialize
         self._initialize_default_field()
         self._add_add_new_field_button()
-        
+
         self.is_dirty = False
         self.resource_input.setFocus()
-    
+
     def update_namespaces(self, namespaces, namespace_colors, namespace_resources=None):
         """Update the list of namespaces and their resources"""
         self.namespaces = namespaces
@@ -841,25 +876,29 @@ class SecretCreateWidget(QWidget):
         if namespace_resources is not None:
             self.namespace_resources = namespace_resources
         self._populate_namespace_tags()
-    
+
     def _on_tags_focus_in(self):
         """Highlight tags section on focus (blue for navigation)"""
         # Remove highlight from other sections
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
+        self.resource_input_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
         for row in self.field_rows:
-            row['container'].setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
-        
+            row["container"].setStyleSheet(
+                "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+            )
+
         self.tags_border_indicator.setStyleSheet("background-color: #89b4fa;")  # Blue for navigation
         self.current_focus_index = 0
         self.tags_interaction_mode = False
         self._update_tag_highlights()
-    
+
     def _on_tags_focus_out(self):
         """Remove highlight from tags section"""
         self.tags_border_indicator.setStyleSheet("background-color: transparent;")
         self.tags_interaction_mode = False
         self._update_tag_highlights()
-    
+
     def _enter_tags_interaction_mode(self):
         """Enter interaction mode for tags"""
         self.tags_interaction_mode = True
@@ -871,7 +910,7 @@ class SecretCreateWidget(QWidget):
             self._update_tag_highlights()
         # Emit state change
         self.state_changed.emit("create_tags")
-    
+
     def _exit_tags_interaction_mode(self):
         """Exit interaction mode for tags"""
         self.tags_interaction_mode = False
@@ -879,34 +918,34 @@ class SecretCreateWidget(QWidget):
         self._update_tag_highlights()
         # Emit state change back to normal create mode
         self.state_changed.emit("create")
-    
+
     def _update_tag_highlights(self):
         """Update visual highlights for tags based on state"""
         checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
-        
+
         for i, btn in enumerate(checkable_buttons):
             namespace = btn.text()
-            color = self.namespace_colors.get(namespace, extra['primaryColor'])
+            color = self.namespace_colors.get(namespace, extra["primaryColor"])
             rgb = self._hex_to_rgb(color)
-            
+
             # Determine border based on state
             is_active = self.tags_interaction_mode and i == self.current_tag_index
             is_selected = btn.isChecked()
-            
+
             # Border color
             if is_active:
-                border_style = f"border: 2px solid #f9e2af;"
+                border_style = "border: 2px solid #f9e2af;"
             elif is_selected:
                 border_style = f"border: 2px solid {color};"
             else:
                 border_style = f"border: 1px solid {color};"
-            
+
             # Background and text color
             if is_selected:
                 bg_text_style = f"background-color: {color}; color: {extra['secondaryColor']};"
             else:
                 bg_text_style = f"background-color: rgba({rgb}, 0.2); color: {color};"
-            
+
             # Apply styling
             btn.setStyleSheet(
                 f"QPushButton {{ "
@@ -923,53 +962,65 @@ class SecretCreateWidget(QWidget):
                 f"  background-color: rgba({rgb}, 0.3); "
                 f"}} "
             )
-    
+
     def _on_resource_focus_in(self, event):
         """Highlight resource input on focus"""
         # Remove highlight from tags section
         self.tags_border_indicator.setStyleSheet("background-color: transparent;")
-        
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+
+        self.resource_input_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
+        )
         self.current_focus_index = 1
-    
+
     def _on_resource_focus_out(self, event):
         """Remove highlight from resource input"""
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
-    
+        self.resource_input_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
+
     def _on_field_focus_in(self, event, container):
         """Highlight field row on focus"""
         # Remove highlight from tags and resource sections
         self.tags_border_indicator.setStyleSheet("background-color: transparent;")
-        self.resource_input_container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
-        
+        self.resource_input_container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
+
         # Highlight this field
-        container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+        container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
+        )
         # Update current focus index
         for i, row in enumerate(self.field_rows):
-            if row['container'] == container:
+            if row["container"] == container:
                 self.current_focus_index = i + 2  # +2 because 0 is tags, 1 is resource_input
                 break
-    
+
     def _on_field_focus_out(self, event, container):
         """Remove highlight from field row"""
-        container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }")
-    
+        container.setStyleSheet(
+            "QWidget { background-color: transparent; border-left: 3px solid transparent; padding-left: 8px; }"
+        )
+
     def _on_editing_state_changed(self, container, is_editing):
         """Change border color based on editing state"""
         if is_editing:
             # Yellow border for editing mode
-            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }")
-            
+            container.setStyleSheet(
+                "QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }"
+            )
+
             # Check if this is a new field (editable key with empty values)
             is_new_field = False
             for row in self.field_rows:
-                if row['container'] == container and row['key_editable']:
-                    key = row['key_input'].text().strip()
-                    value = row['value_input'].text().strip()
+                if row["container"] == container and row["key_editable"]:
+                    key = row["key_input"].text().strip()
+                    value = row["value_input"].text().strip()
                     if not key and not value:
                         is_new_field = True
                         break
-            
+
             # Emit appropriate state
             if is_new_field:
                 self.state_changed.emit("create_new_field")
@@ -977,10 +1028,12 @@ class SecretCreateWidget(QWidget):
                 self.state_changed.emit("create_editing")
         else:
             # Blue border for navigation mode
-            container.setStyleSheet("QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }")
+            container.setStyleSheet(
+                "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
+            )
             # Return to normal create mode
             self.state_changed.emit("create")
-    
+
     def _focus_element(self, index):
         """Focus on element by index (0 = tags, 1 = resource_input, 2+ = field_rows)"""
         if index == 0:
@@ -990,26 +1043,26 @@ class SecretCreateWidget(QWidget):
             self.resource_input.setFocus()
         elif index >= 2:
             row = self.field_rows[index - 2]
-            row['value_input'].setFocus()
-    
+            row["value_input"].setFocus()
+
     def _handle_navigation(self, event):
         """Handle keyboard navigation"""
         key = event.key()
         modifiers = event.modifiers()
-        
+
         # Navigation mode:
         # Esc - go back (with confirmation if dirty)
         if key == Qt.Key_Escape:
             self._handle_back()
             return
-        
+
         # Enter - enable editing mode
         focused = self.focusWidget()
         if key in (Qt.Key_Return, Qt.Key_Enter) and modifiers == Qt.NoModifier:
             if isinstance(focused, StyledLineEdit):
                 focused.set_editing(True)
                 return
-        
+
         # Tab navigation within field (between key and value)
         if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
             if self.current_focus_index >= 2:  # We're in a field row
@@ -1017,10 +1070,10 @@ class SecretCreateWidget(QWidget):
                 if row_index < len(self.field_rows):
                     row = self.field_rows[row_index]
                     focused = self.focusWidget()
-                    if focused == row['key_input']:
-                        row['value_input'].setFocus()
+                    if focused == row["key_input"]:
+                        row["value_input"].setFocus()
                         return
-                    elif focused == row['value_input']:
+                    elif focused == row["value_input"]:
                         # Move to next element
                         total_elements = 2 + len(self.field_rows)
                         next_index = (self.current_focus_index + 1) % total_elements
@@ -1031,20 +1084,20 @@ class SecretCreateWidget(QWidget):
             next_index = (self.current_focus_index + 1) % total_elements
             self._focus_element(next_index)
             return
-        
+
         # Navigation with arrows
         if key == Qt.Key_Down:
             total_elements = 2 + len(self.field_rows)  # tags + resource_input + field_rows
             next_index = (self.current_focus_index + 1) % total_elements
             self._focus_element(next_index)
             return
-        
+
         if key == Qt.Key_Up:
             total_elements = 2 + len(self.field_rows)
             next_index = (self.current_focus_index - 1) % total_elements
             self._focus_element(next_index)
             return
-        
+
         # Hotkeys with Ctrl
         if modifiers == Qt.ControlModifier:
             if key == Qt.Key_N:
@@ -1059,26 +1112,26 @@ class SecretCreateWidget(QWidget):
                 # Save
                 self._prompt_to_save()
                 return
-    
+
     def _handle_tags_keypress(self, event):
         """Handle keypresses in tags section"""
         key = event.key()
         modifiers = event.modifiers()
-        
+
         # Ctrl+N - add new field (works in both modes)
         if modifiers == Qt.ControlModifier and key == Qt.Key_N:
             self._add_new_field()
             event.accept()
             return
-        
+
         # Ctrl+T - add new tag (works in both modes)
         if modifiers == Qt.ControlModifier and key == Qt.Key_T:
             self._add_new_namespace()
             event.accept()
             return
-        
+
         checkable_buttons = [btn for btn in self.namespace_buttons if btn.isCheckable()]
-        
+
         # Navigation mode (not in interaction)
         if not self.tags_interaction_mode:
             # Enter - enter interaction mode
@@ -1086,65 +1139,65 @@ class SecretCreateWidget(QWidget):
                 self._enter_tags_interaction_mode()
                 event.accept()
                 return
-            
+
             # Esc - go back (with confirmation if dirty)
             if key == Qt.Key_Escape:
                 self._handle_back()
                 event.accept()
                 return
-            
+
             # Arrow Down/Up - exit tags section
             if key == Qt.Key_Down:
                 self._on_tags_focus_out()
                 self._focus_element(1)  # Move to resource_input
                 event.accept()
                 return
-            
+
             if key == Qt.Key_Up:
                 self._on_tags_focus_out()
                 total_elements = 2 + len(self.field_rows)
                 self._focus_element(total_elements - 1)  # Move to last field
                 event.accept()
                 return
-        
+
         # Interaction mode
         else:
             if not checkable_buttons:
                 return
-            
+
             # Esc - exit interaction mode
             if key == Qt.Key_Escape:
                 self._exit_tags_interaction_mode()
                 event.accept()
                 return
-            
+
             # Arrow Left/Right - navigate between tags
             if key == Qt.Key_Left:
                 self.current_tag_index = (self.current_tag_index - 1) % len(checkable_buttons)
                 self._update_tag_highlights()
                 event.accept()
                 return
-            
+
             if key == Qt.Key_Right:
                 self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
                 self._update_tag_highlights()
                 event.accept()
                 return
-            
+
             # Tab - navigate between tags (same as Right)
             if key == Qt.Key_Tab and modifiers == Qt.NoModifier:
                 self.current_tag_index = (self.current_tag_index + 1) % len(checkable_buttons)
                 self._update_tag_highlights()
                 event.accept()
                 return
-            
+
             # Shift+Tab - navigate backward (same as Left)
             if key == Qt.Key_Tab and modifiers == Qt.ShiftModifier:
                 self.current_tag_index = (self.current_tag_index - 1) % len(checkable_buttons)
                 self._update_tag_highlights()
                 event.accept()
                 return
-            
+
             # Space or Enter - select tag
             if key in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
                 if self.current_tag_index < len(checkable_buttons):

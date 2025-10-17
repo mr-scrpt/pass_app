@@ -1,0 +1,29 @@
+# Ruff configuration
+# https://docs.astral.sh/ruff/
+
+# Исключить архивные и тестовые файлы
+exclude = [
+    "_archive",
+    "*.pyc",
+    "__pycache__",
+]
+
+# Максимальная длина строки
+line-length = 120
+
+[lint]
+# Включенные правила:
+# F - pyflakes (ошибки, неиспользуемые импорты)
+# E - pycodestyle errors
+# W - pycodestyle warnings
+# I - isort (сортировка импортов)
+select = ["F", "E", "W", "I"]
+
+# Игнорировать некоторые правила
+ignore = [
+    "E501",  # Длина строки (уже контролируется line-length)
+]
+
+[lint.isort]
+# Настройки сортировки импортов
+known-first-party = ["components", "ui_theme", "ui_components", "backend_utils", "hotkey_manager", "utils"]

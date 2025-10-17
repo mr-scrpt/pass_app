@@ -1,5 +1,4 @@
 import os
-import re
 
 ICON_ROOT = os.path.join(os.path.dirname(__file__), 'icon', 'keyboard', 'icons')
 filepath = os.path.join(ICON_ROOT, 'icon-escape.svg')

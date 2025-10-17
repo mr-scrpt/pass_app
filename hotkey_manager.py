@@ -1,5 +1,6 @@
-from PySide6.QtGui import QKeySequence
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence
+
 
 class HotkeyManager:
     def __init__(self):
@@ -18,7 +19,7 @@ class HotkeyManager:
     def handle(self, event):
         key = event.key()
         modifiers = event.modifiers()
-        
+
         key_combo = ""
         if modifiers & Qt.ControlModifier:
             key_combo += "ctrl+"
@@ -30,6 +31,6 @@ class HotkeyManager:
 
         if key_combo in self.handlers:
             for priority, handler in self.handlers[key_combo]:
-                if handler(event): 
+                if handler(event):
                     return True
         return False

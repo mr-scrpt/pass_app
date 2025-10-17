@@ -1,8 +1,10 @@
-
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLineEdit
+
+from PySide6.QtWidgets import QApplication, QLineEdit, QMainWindow, QVBoxLayout, QWidget
 from qt_material import apply_stylesheet
+
 from ui_theme import extra
+
 
 class TestWindow(QMainWindow):
     def __init__(self):
@@ -18,12 +20,14 @@ class TestWindow(QMainWindow):
         main_layout.addWidget(QLineEdit("Test Input 2"))
         main_layout.addWidget(QLineEdit("Test Input 3"))
 
+
 def main():
     app = QApplication(sys.argv)
-    apply_stylesheet(app, theme='dark_blue.xml', extra=extra)
+    apply_stylesheet(app, theme="dark_blue.xml", extra=extra)
     window = TestWindow()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

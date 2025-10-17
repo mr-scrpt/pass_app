@@ -1,89 +1,93 @@
 import sys
-from PySide6.QtCore import Qt, QEvent, QTimer, QThread, Signal
-from PySide6.QtGui import QKeyEvent, QMovie
+
+from PySide6.QtCore import QEvent, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
+    QDialog,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QStackedWidget,
+    QMainWindow,
     QPushButton,
-    QDialog,
-    QLabel
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
 from qt_material import apply_stylesheet
 
 from backend_utils import (
-    get_list_from_backend, 
-    get_secret_from_backend, 
-    save_secret_to_backend,
-    git_push_to_backend,
+    get_list_from_backend,
+    get_secret_from_backend,
     git_pull_from_backend,
-    git_status_from_backend
+    git_push_to_backend,
+    git_status_from_backend,
+    save_secret_to_backend,
 )
-from ui_theme import CATPPUCCIN_COLORS, extra
 from components.confirmation_dialog import ConfirmationDialog
-from components.hotkey_help import HotkeyHelpWidget
-from components.secret_detail_view import SecretDetailWidget
-from components.secret_create_view import SecretCreateWidget
-from components.secret_list_item import SecretListItem
-from components.password_generator_dialog import PasswordGeneratorDialog
-from components.status_bar import StatusBarWidget
 from components.hotkey_cheatsheet_dialog import HotkeyCheatsheetDialog
+from components.hotkey_help import HotkeyHelpWidget
+from components.password_generator_dialog import PasswordGeneratorDialog
+from components.secret_create_view import SecretCreateWidget
+from components.secret_detail_view import SecretDetailWidget
+from components.secret_list_item import SecretListItem
 from hotkey_manager import HotkeyManager
+from ui_theme import CATPPUCCIN_COLORS, extra
 from utils import generate_password
+
 
 class GitSyncWorker(QThread):
     """Worker thread for asynchronous git operations."""
+
     finished = Signal(bool, str, str)  # success, message, operation_type
-    
+
     def __init__(self, operation_type):
         super().__init__()
         self.operation_type = operation_type  # 'sync', 'push', 'pull', 'status'
-    
+
     def run(self):
         try:
-            if self.operation_type == 'sync':
+            if self.operation_type == "sync":
                 # Pull first
                 pull_result = git_pull_from_backend()
                 if pull_result.get("status") == "error":
-                    self.finished.emit(False, f"Pull failed: {pull_result.get('message', 'Unknown error')}", 'sync')
+                    self.finished.emit(False, f"Pull failed: {pull_result.get('message', 'Unknown error')}", "sync")
                     return
-                
+
                 # Then push
                 push_result = git_push_to_backend()
                 if push_result.get("status") == "error":
-                    self.finished.emit(False, f"Push failed: {push_result.get('message', 'Unknown error')}", 'sync')
+                    self.finished.emit(False, f"Push failed: {push_result.get('message', 'Unknown error')}", "sync")
                     return
-                
-                self.finished.emit(True, "Successfully synced with remote.", 'sync')
-            
-            elif self.operation_type == 'push':
+
+                self.finished.emit(True, "Successfully synced with remote.", "sync")
+
+            elif self.operation_type == "push":
                 result = git_push_to_backend()
                 if result.get("status") == "error":
-                    self.finished.emit(False, f"Push failed: {result.get('message', 'Unknown error')}", 'push')
+                    self.finished.emit(False, f"Push failed: {result.get('message', 'Unknown error')}", "push")
                 else:
-                    self.finished.emit(True, result.get('message', 'Successfully pushed'), 'push')
-            
-            elif self.operation_type == 'pull':
+                    self.finished.emit(True, result.get("message", "Successfully pushed"), "push")
+
+            elif self.operation_type == "pull":
                 result = git_pull_from_backend()
                 if result.get("status") == "error":
-                    self.finished.emit(False, f"Pull failed: {result.get('message', 'Unknown error')}", 'pull')
+                    self.finished.emit(False, f"Pull failed: {result.get('message', 'Unknown error')}", "pull")
                 else:
-                    self.finished.emit(True, result.get('message', 'Successfully pulled'), 'pull')
-            
-            elif self.operation_type == 'status':
+                    self.finished.emit(True, result.get("message", "Successfully pulled"), "pull")
+
+            elif self.operation_type == "status":
                 status = git_status_from_backend()
                 # For status, we just emit success with the status data as message
                 import json
-                self.finished.emit(True, json.dumps(status), 'status')
-        
+
+                self.finished.emit(True, json.dumps(status), "status")
+
         except Exception as e:
             self.finished.emit(False, str(e), self.operation_type)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -110,14 +114,14 @@ class MainWindow(QMainWindow):
         self.action_help_widget = HotkeyHelpWidget(category="Actions")
         main_layout.addWidget(self.nav_help_widget)
         main_layout.addWidget(self.action_help_widget)
-        
+
         # Footer: mode (left) + help hint (center) + status (right)
         footer_widget = QWidget()
         footer_widget.setStyleSheet("background-color: transparent; padding: 4px 15px;")
         footer_layout = QHBoxLayout(footer_widget)
         footer_layout.setContentsMargins(10, 3, 10, 3)
         footer_layout.setSpacing(15)
-        
+
         # Mode label (left) - colored
         self.mode_label = QLabel("SEARCH MODE")
         self.mode_label.setStyleSheet("""
@@ -130,10 +134,10 @@ class MainWindow(QMainWindow):
         self.mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.mode_label.setMinimumWidth(150)
         footer_layout.addWidget(self.mode_label)
-        
+
         # Left spacer
         footer_layout.addStretch(1)
-        
+
         # Help hint (center)
         self.help_hint = QLabel("Press F1 or Ctrl+H for full keyboard shortcuts reference")
         self.help_hint.setStyleSheet("""
@@ -145,10 +149,10 @@ class MainWindow(QMainWindow):
         """)
         self.help_hint.setAlignment(Qt.AlignCenter)
         footer_layout.addWidget(self.help_hint)
-        
+
         # Right spacer
         footer_layout.addStretch(1)
-        
+
         # Status label (right) - colored by type
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("""
@@ -160,32 +164,32 @@ class MainWindow(QMainWindow):
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.status_label.setMinimumWidth(200)
         footer_layout.addWidget(self.status_label)
-        
+
         main_layout.addWidget(footer_widget)
 
         # --- Search View ---
         self.search_view = QWidget()
         search_layout = QVBoxLayout(self.search_view)
-        
+
         # Add create button to search view
         search_header = QWidget()
         search_header_layout = QHBoxLayout(search_header)
         search_header_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search secrets...")
         search_header_layout.addWidget(self.search_bar, stretch=1)
-        
+
         import qtawesome as qta
-        
+
         # Sync button with status indicator
         self.sync_button = QPushButton()
-        self.sync_button.setIcon(qta.icon('fa5s.sync-alt', color='#89b4fa'))
+        self.sync_button.setIcon(qta.icon("fa5s.sync-alt", color="#89b4fa"))
         self.sync_button.setToolTip("Sync with remote (Ctrl+R)")
         self.sync_button.setFixedSize(40, 40)
         self.sync_button.clicked.connect(self._handle_sync)
         search_header_layout.addWidget(self.sync_button)
-        
+
         # Sync loader (spinner)
         self.sync_loader = QLabel("⟳")
         self.sync_loader.setStyleSheet("color: #89b4fa; font-size: 20px;")
@@ -193,50 +197,50 @@ class MainWindow(QMainWindow):
         self.sync_loader.setFixedWidth(20)
         self.sync_loader.hide()  # Hidden by default
         search_header_layout.addWidget(self.sync_loader)
-        
+
         # Animation timer for loader
         self.loader_timer = QTimer()
         self.loader_timer.timeout.connect(self._animate_loader)
         self.loader_rotation = 0
-        
+
         # Sync status indicator (dot)
         self.sync_status_indicator = QLabel("●")
         self.sync_status_indicator.setStyleSheet("color: #6c7086; font-size: 16px;")  # Gray by default
         self.sync_status_indicator.setToolTip("Sync status")
         self.sync_status_indicator.setFixedWidth(20)
         search_header_layout.addWidget(self.sync_status_indicator)
-        
+
         # Worker thread for git operations
         self.git_worker = None
-        
+
         self.create_button = QPushButton()
-        self.create_button.setIcon(qta.icon('fa5s.plus', color='#a6e3a1'))
+        self.create_button.setIcon(qta.icon("fa5s.plus", color="#a6e3a1"))
         self.create_button.setToolTip("Create new secret (Ctrl+N)")
         self.create_button.setFixedSize(40, 40)
         self.create_button.clicked.connect(self._show_create_view)
         search_header_layout.addWidget(self.create_button)
-        
+
         search_layout.addWidget(search_header)
-        
+
         # Initialize sync status check
         self.sync_status_timer = QTimer()
         self.sync_status_timer.timeout.connect(self._check_git_status_async)
         self.sync_status_timer.start(30000)  # Check every 30 seconds
-        
+
         self.results_list = QListWidget()
-        self.results_list.setStyleSheet("QListWidget::item { border: none; padding: 0px; } QListWidget::item:selected { background-color: rgba(137, 180, 250, 0.2); border-left: 3px solid #89b4fa; } QListWidget::item:hover { background-color: rgba(137, 180, 250, 0.1); }")
+        self.results_list.setStyleSheet(
+            "QListWidget::item { border: none; padding: 0px; } QListWidget::item:selected { background-color: rgba(137, 180, 250, 0.2); border-left: 3px solid #89b4fa; } QListWidget::item:hover { background-color: rgba(137, 180, 250, 0.1); }"
+        )
         search_layout.addWidget(self.results_list)
         self.stack.addWidget(self.search_view)
 
         # --- Details View ---
         self.details_widget = SecretDetailWidget(
-            back_callback=self._show_search_view,
-            save_callback=self._save_secret,
-            show_status_callback=self.show_status
+            back_callback=self._show_search_view, save_callback=self._save_secret, show_status_callback=self.show_status
         )
         self.details_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.details_widget)
-        
+
         # --- Create View ---
         self.create_widget = SecretCreateWidget(
             back_callback=self._show_search_view_from_create,
@@ -244,7 +248,7 @@ class MainWindow(QMainWindow):
             show_status_callback=self.show_status,
             namespace_colors=self.namespace_colors,
             namespaces=list(self.namespace_colors.keys()),
-            namespace_resources=self.namespace_resources
+            namespace_resources=self.namespace_resources,
         )
         self.create_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.create_widget)
@@ -254,27 +258,27 @@ class MainWindow(QMainWindow):
         self.search_bar.textChanged.connect(self._on_search_changed)
         self.results_list.itemActivated.connect(self._on_item_activated)
         self.results_list.currentItemChanged.connect(self._on_selection_changed)
-        
+
         self.installEventFilter(self)
         self._register_hotkeys()
         self._show_search_view()
-        
+
         # Check git status on startup (async)
         QTimer.singleShot(1000, self._check_git_status_async)
 
     def _register_hotkeys(self):
-        self.hotkey_manager.register('ctrl+g', self.handle_simple_generate, priority=20)
-        self.hotkey_manager.register('ctrl+shift+g', self.handle_advanced_generate, priority=20)
-        self.hotkey_manager.register('f1', self.handle_help, priority=25)
-        self.hotkey_manager.register('ctrl+h', self.handle_help, priority=25)
-        self.hotkey_manager.register('esc', self.handle_esc, priority=10)
-        self.hotkey_manager.register('ctrl+s', self.handle_save, priority=10)
-        self.hotkey_manager.register('ctrl+r', self.handle_sync, priority=10)
-        self.hotkey_manager.register('ctrl+n', self.handle_add_field, priority=8)
-        self.hotkey_manager.register('down', self.handle_search_nav, priority=5)
-        self.hotkey_manager.register('up', self.handle_search_nav, priority=5)
-        self.hotkey_manager.register('return', self.handle_search_activate, priority=5)
-        self.hotkey_manager.register('enter', self.handle_search_activate, priority=5)
+        self.hotkey_manager.register("ctrl+g", self.handle_simple_generate, priority=20)
+        self.hotkey_manager.register("ctrl+shift+g", self.handle_advanced_generate, priority=20)
+        self.hotkey_manager.register("f1", self.handle_help, priority=25)
+        self.hotkey_manager.register("ctrl+h", self.handle_help, priority=25)
+        self.hotkey_manager.register("esc", self.handle_esc, priority=10)
+        self.hotkey_manager.register("ctrl+s", self.handle_save, priority=10)
+        self.hotkey_manager.register("ctrl+r", self.handle_sync, priority=10)
+        self.hotkey_manager.register("ctrl+n", self.handle_add_field, priority=8)
+        self.hotkey_manager.register("down", self.handle_search_nav, priority=5)
+        self.hotkey_manager.register("up", self.handle_search_nav, priority=5)
+        self.hotkey_manager.register("return", self.handle_search_activate, priority=5)
+        self.hotkey_manager.register("enter", self.handle_search_activate, priority=5)
 
     def eventFilter(self, source, event):
         if event.type() == QEvent.KeyPress:
@@ -284,7 +288,7 @@ class MainWindow(QMainWindow):
             if key == Qt.Key_F1 or (key == Qt.Key_H and modifiers == Qt.ControlModifier):
                 self.handle_help(event)
                 return True
-            
+
             if self.hotkey_manager.handle(event):
                 return True
         return super().eventFilter(source, event)
@@ -292,9 +296,9 @@ class MainWindow(QMainWindow):
     def show_status(self, message, status_type="info"):
         """Show status message with color coding"""
         color_map = {
-            "info": "#89b4fa",      # Blue
-            "success": "#a6e3a1",   # Green
-            "error": "#f38ba8"      # Red
+            "info": "#89b4fa",  # Blue
+            "success": "#a6e3a1",  # Green
+            "error": "#f38ba8",  # Red
         }
         color = color_map.get(status_type, "#6c7086")
         self.status_label.setText(message)
@@ -304,19 +308,19 @@ class MainWindow(QMainWindow):
             padding: 0px;
             background-color: transparent;
         """)
-    
+
     def update_help_text(self, state):
         # Update mode label with color coding
         mode_config = {
-            "search": {"text": "SEARCH MODE", "color": "#89b4fa"},         # Blue
-            "normal": {"text": "NORMAL MODE", "color": "#a6e3a1"},         # Green
-            "edit": {"text": "EDITING", "color": "#f9e2af"},               # Yellow
-            "deep_edit": {"text": "DEEP EDIT", "color": "#fab387"},        # Orange
-            "add_new": {"text": "ADD NEW FIELD", "color": "#cba6f7"},      # Purple
-            "create": {"text": "CREATE MODE", "color": "#89dceb"},         # Cyan
-            "create_tags": {"text": "TAGS SELECT", "color": "#f5c2e7"},    # Pink
-            "create_editing": {"text": "EDITING", "color": "#f9e2af"},     # Yellow
-            "create_new_field": {"text": "NEW FIELD", "color": "#cba6f7"}  # Purple
+            "search": {"text": "SEARCH MODE", "color": "#89b4fa"},  # Blue
+            "normal": {"text": "NORMAL MODE", "color": "#a6e3a1"},  # Green
+            "edit": {"text": "EDITING", "color": "#f9e2af"},  # Yellow
+            "deep_edit": {"text": "DEEP EDIT", "color": "#fab387"},  # Orange
+            "add_new": {"text": "ADD NEW FIELD", "color": "#cba6f7"},  # Purple
+            "create": {"text": "CREATE MODE", "color": "#89dceb"},  # Cyan
+            "create_tags": {"text": "TAGS SELECT", "color": "#f5c2e7"},  # Pink
+            "create_editing": {"text": "EDITING", "color": "#f9e2af"},  # Yellow
+            "create_new_field": {"text": "NEW FIELD", "color": "#cba6f7"},  # Purple
         }
         config = mode_config.get(state, {"text": "UNKNOWN", "color": "#6c7086"})
         self.mode_label.setText(config["text"])
@@ -327,71 +331,68 @@ class MainWindow(QMainWindow):
             padding: 0px;
             background-color: transparent;
         """)
-        
+
         help_texts = {
             "search": {
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Navigate  |  Enter - View",
                 "category_action": "Actions",
-                "action": "Ctrl+N - Create  |  Ctrl+R - Sync  |  Ctrl+G - Generate password  |  Ctrl+Shift+G - Advanced"
+                "action": "Ctrl+N - Create  |  Ctrl+R - Sync  |  Ctrl+G - Generate password  |  Ctrl+Shift+G - Advanced",
             },
             "normal": {
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Fields  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
-                "action": "Enter - Copy  |  Ctrl+E - Edit  |  Ctrl+Shift+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save"
+                "action": "Enter - Copy  |  Ctrl+E - Edit  |  Ctrl+Shift+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save",
             },
             "edit": {
                 "category_nav": "Navigation",
                 "nav": "Focus locked",
                 "category_action": "Actions",
-                "action": "Enter - Confirm  |  Esc - Cancel  |  Tab - Navigate"
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Tab - Navigate",
             },
             "deep_edit": {
                 "category_nav": "Navigation",
                 "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
                 "category_action": "Actions",
-                "action": "Enter - Confirm  |  Ctrl+D - Delete  |  Esc - Cancel"
+                "action": "Enter - Confirm  |  Ctrl+D - Delete  |  Esc - Cancel",
             },
             "add_new": {
                 "category_nav": "Navigation",
                 "nav": "Tab - Switch fields  |  Shift+Tab - Backward",
                 "category_action": "Actions",
-                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+N - Add Another"
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+N - Add Another",
             },
             "create": {
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Sections  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
-                "action": "Enter - Activate  |  Ctrl+E - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate"
+                "action": "Enter - Activate  |  Ctrl+E - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate",
             },
             "create_tags": {
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Navigate tags  |  Tab - Next tag  |  Shift+Tab - Previous  |  Esc - Exit tags",
                 "category_action": "Actions",
-                "action": "Enter - Select/deselect tag  |  Space - Toggle  |  Ctrl+T - Add new namespace"
+                "action": "Enter - Select/deselect tag  |  Space - Toggle  |  Ctrl+T - Add new namespace",
             },
             "create_editing": {
                 "category_nav": "Navigation",
                 "nav": "Focus locked on editing field  |  Tab - Navigate within input",
                 "category_action": "Actions",
-                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+G - Generate (if password)"
+                "action": "Enter - Confirm  |  Esc - Cancel  |  Ctrl+G - Generate (if password)",
             },
             "create_new_field": {
                 "category_nav": "Navigation",
                 "nav": "Tab - Switch key/value  |  Shift+Tab - Backward",
                 "category_action": "Actions",
-                "action": "Enter - Confirm field  |  Esc - Delete empty  |  Ctrl+N - Add another"
-            }
+                "action": "Enter - Confirm field  |  Esc - Delete empty  |  Ctrl+N - Add another",
+            },
         }
-        texts = help_texts.get(state, {
-            "category_nav": "Navigation", 
-            "nav": "", 
-            "category_action": "Actions", 
-            "action": ""
-        })
-        self.nav_help_widget.update_content(texts['category_nav'], texts['nav'])
-        self.action_help_widget.update_content(texts['category_action'], texts['action'])
+        texts = help_texts.get(
+            state, {"category_nav": "Navigation", "nav": "", "category_action": "Actions", "action": ""}
+        )
+        self.nav_help_widget.update_content(texts["category_nav"], texts["nav"])
+        self.action_help_widget.update_content(texts["category_action"], texts["action"])
 
     def handle_simple_generate(self, event):
         password = generate_password()
@@ -403,7 +404,7 @@ class MainWindow(QMainWindow):
         dialog = PasswordGeneratorDialog(self, show_status_callback=self.show_status)
         dialog.exec()
         return True
-    
+
     def handle_help(self, event):
         """Show hotkey cheatsheet dialog"""
         dialog = HotkeyCheatsheetDialog(self)
@@ -415,7 +416,7 @@ class MainWindow(QMainWindow):
 
     def handle_save(self, event):
         return False
-    
+
     def handle_sync(self, event):
         """Handle Ctrl+R for sync on search view."""
         if self.stack.currentIndex() == 0:  # Search view
@@ -454,25 +455,25 @@ class MainWindow(QMainWindow):
         self.all_secrets = []
         self.namespace_resources = {}  # Reset namespace resources
         namespaces_seen = []
-        
+
         for ns_item in backend_data:
             namespace = ns_item.get("namespace", "Unknown")
-            
+
             if namespace not in self.namespace_colors:
                 if namespace not in namespaces_seen:
                     namespaces_seen.append(namespace)
                 color_index = namespaces_seen.index(namespace) % len(CATPPUCCIN_COLORS)
                 self.namespace_colors[namespace] = CATPPUCCIN_COLORS[color_index]
-            
+
             # Build namespace_resources dictionary
             resources = ns_item.get("resources", [])
             self.namespace_resources[namespace] = resources
-            
+
             for resource_name in resources:
                 plain_text = f"[{namespace}]: {resource_name}"
                 item_data = {"namespace": namespace, "resource": resource_name}
                 self.all_secrets.append((plain_text, item_data))
-        
+
         self.all_secrets.sort()
         self._populate_list(self.all_secrets)
 
@@ -481,18 +482,18 @@ class MainWindow(QMainWindow):
         for _, secret_data in secrets_to_display:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, secret_data)
-            
-            ns_color = self.namespace_colors.get(secret_data["namespace"], extra['secondaryTextColor'])
-            
+
+            ns_color = self.namespace_colors.get(secret_data["namespace"], extra["secondaryTextColor"])
+
             list_item_widget = SecretListItem(
-                secret_data["namespace"], 
-                secret_data["resource"], 
+                secret_data["namespace"],
+                secret_data["resource"],
                 ns_color,
-                view_callback=lambda checked=False, i=item: self._view_secret_from_item(i)
+                view_callback=lambda checked=False, i=item: self._view_secret_from_item(i),
             )
-            
+
             item.setSizeHint(list_item_widget.sizeHint())
-            
+
             self.results_list.addItem(item)
             self.results_list.setItemWidget(item, list_item_widget)
 
@@ -501,12 +502,12 @@ class MainWindow(QMainWindow):
             prev_widget = self.results_list.itemWidget(previous)
             if isinstance(prev_widget, SecretListItem):
                 prev_widget.set_selected(False)
-        
+
         if current:
             curr_widget = self.results_list.itemWidget(current)
             if isinstance(curr_widget, SecretListItem):
                 curr_widget.set_selected(True)
-        
+
         self.current_selected_item = current
 
     def _on_search_changed(self, text):
@@ -529,10 +530,10 @@ class MainWindow(QMainWindow):
     def _view_secret(self, item_data):
         secret_details = get_secret_from_backend(item_data["namespace"], item_data["resource"])
         self.details_widget.populate_data(
-            secret_details, 
+            secret_details,
             f"[{item_data['namespace']}] {item_data['resource']}",
-            item_data['namespace'],
-            item_data['resource']
+            item_data["namespace"],
+            item_data["resource"],
         )
         self._show_details_view()
 
@@ -556,42 +557,40 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(1)
         if self.details_widget.field_rows:
             self.details_widget._focus_field(0)
-    
+
     def _show_create_view(self):
         # Update namespaces and resources before showing
         self.create_widget.update_namespaces(
-            list(self.namespace_colors.keys()),
-            self.namespace_colors,
-            self.namespace_resources
+            list(self.namespace_colors.keys()), self.namespace_colors, self.namespace_resources
         )
         self.update_help_text("create")
         self.stack.setCurrentIndex(2)
         # Focus on tags section (first element)
         self.create_widget.namespace_main_container.setFocus()
         self.create_widget._on_tags_focus_in()
-    
+
     def _show_search_view_from_create(self):
         self.load_data_and_populate()
         self._show_search_view()
-    
+
     def _handle_sync(self):
         """Handle git synchronization (pull then push) asynchronously."""
         if self.git_worker and self.git_worker.isRunning():
             return  # Already syncing
-        
+
         self.show_status("Syncing with remote...", "info")
         self.sync_button.setEnabled(False)
-        
+
         # Show loader and start animation
         self.sync_status_indicator.hide()
         self.sync_loader.show()
         self.loader_timer.start(50)  # Update every 50ms
-        
+
         # Start async sync
-        self.git_worker = GitSyncWorker('sync')
+        self.git_worker = GitSyncWorker("sync")
         self.git_worker.finished.connect(self._on_sync_finished)
         self.git_worker.start()
-    
+
     def _on_sync_finished(self, success, message, operation_type):
         """Handle completion of git sync operation."""
         # Stop loader animation
@@ -599,7 +598,7 @@ class MainWindow(QMainWindow):
         self.sync_loader.hide()
         self.sync_status_indicator.show()
         self.sync_button.setEnabled(True)
-        
+
         if success:
             # Reload data
             self.load_data_and_populate()
@@ -608,35 +607,36 @@ class MainWindow(QMainWindow):
             self._check_git_status_async()
         else:
             self.show_status(message, "error")
-    
+
     def _animate_loader(self):
         """Animate the sync loader."""
         # Simple rotation animation using unicode arrows
-        arrows = ['⟳', '↻', '⟲', '↺']
+        arrows = ["⟳", "↻", "⟲", "↺"]
         self.loader_rotation = (self.loader_rotation + 1) % len(arrows)
         self.sync_loader.setText(arrows[self.loader_rotation])
-    
+
     def _check_git_status(self):
         """Check git status and update indicator (synchronous - for backward compatibility)."""
         status = git_status_from_backend()
         self._update_status_indicator(status)
-    
+
     def _check_git_status_async(self):
         """Check git status asynchronously."""
         if self.git_worker and self.git_worker.isRunning():
             return  # Another operation is running
-        
-        self.git_worker = GitSyncWorker('status')
+
+        self.git_worker = GitSyncWorker("status")
         self.git_worker.finished.connect(self._on_status_check_finished)
         self.git_worker.start()
-    
+
     def _on_status_check_finished(self, success, message, operation_type):
         """Handle completion of git status check."""
         if success:
             import json
+
             status = json.loads(message)
             self._update_status_indicator(status)
-    
+
     def _update_status_indicator(self, status):
         """Update the sync status indicator based on git status."""
         if not status.get("has_remote", False):
@@ -644,10 +644,10 @@ class MainWindow(QMainWindow):
             self.sync_status_indicator.setStyleSheet("color: #6c7086; font-size: 16px;")
             self.sync_status_indicator.setToolTip("No git remote configured")
             return
-        
+
         needs_push = status.get("needs_push", False)
         needs_pull = status.get("needs_pull", False)
-        
+
         if needs_push or needs_pull:
             # Changes to sync - yellow dot
             self.sync_status_indicator.setStyleSheet("color: #f9e2af; font-size: 16px;")
@@ -662,12 +662,14 @@ class MainWindow(QMainWindow):
             self.sync_status_indicator.setStyleSheet("color: #a6e3a1; font-size: 16px;")
             self.sync_status_indicator.setToolTip("Synced with remote")
 
+
 def main():
     app = QApplication(sys.argv)
-    apply_stylesheet(app, theme='dark_blue.xml', extra=extra)
+    apply_stylesheet(app, theme="dark_blue.xml", extra=extra)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

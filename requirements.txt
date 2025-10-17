@@ -8,5 +8,6 @@ PySide6_Essentials==6.10.0
 qt-material==2.17
 QtAwesome==1.4.0
 QtPy==2.4.3
+ruff==0.14.1
 shiboken6==6.10.0
 wcwidth==0.2.14
