@@ -236,7 +236,10 @@ class MainWindow(QMainWindow):
 
         # --- Details View ---
         self.details_widget = SecretDetailWidget(
-            back_callback=self._show_search_view, save_callback=self._save_secret, show_status_callback=self.show_status
+            back_callback=self._show_search_view,
+            save_callback=self._save_secret,
+            show_status_callback=self.show_status,
+            exec_dialog_callback=self._exec_dialog_with_hotkeys,
         )
         self.details_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.details_widget)
@@ -249,6 +252,7 @@ class MainWindow(QMainWindow):
             namespace_colors=self.namespace_colors,
             namespaces=list(self.namespace_colors.keys()),
             namespace_resources=self.namespace_resources,
+            exec_dialog_callback=self._exec_dialog_with_hotkeys,
         )
         self.create_widget.state_changed.connect(self.update_help_text)
         self.stack.addWidget(self.create_widget)
@@ -343,7 +347,7 @@ class MainWindow(QMainWindow):
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Fields  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
-                "action": "Enter - Copy  |  Ctrl+E - Edit  |  Ctrl+Shift+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save",
+                "action": "Enter - Edit  |  Ctrl+C - Copy  |  Ctrl+E - Deep Edit  |  Ctrl+T - Toggle  |  Ctrl+N - New Field  |  Ctrl+D - Delete  |  Ctrl+S - Save",
             },
             "edit": {
                 "category_nav": "Navigation",
@@ -367,7 +371,7 @@ class MainWindow(QMainWindow):
                 "category_nav": "Navigation",
                 "nav": "Up/Down - Sections  |  Tab - Next  |  Shift+Tab - Previous  |  Esc - Back",
                 "category_action": "Actions",
-                "action": "Enter - Activate  |  Ctrl+E - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate",
+                "action": "Enter - Edit  |  Ctrl+T - Add Tag  |  Ctrl+N - Add Field  |  Ctrl+S - Save  |  Ctrl+G - Generate",
             },
             "create_tags": {
                 "category_nav": "Navigation",
@@ -394,6 +398,31 @@ class MainWindow(QMainWindow):
         self.nav_help_widget.update_content(texts["category_nav"], texts["nav"])
         self.action_help_widget.update_content(texts["category_action"], texts["action"])
 
+    def _exec_dialog_with_hotkeys(self, dialog):
+        """
+        Execute a dialog while temporarily updating the main window's hotkey bars.
+        The dialog must have a get_hotkey_info() method that returns hotkey info dict.
+        """
+        # Save current hotkey state
+        saved_nav_category = self.nav_help_widget.category_label.text()
+        saved_nav_text = self.nav_help_widget.content_label.text()
+        saved_action_category = self.action_help_widget.category_label.text()
+        saved_action_text = self.action_help_widget.content_label.text()
+
+        # Update with dialog's hotkeys
+        hotkey_info = dialog.get_hotkey_info()
+        self.nav_help_widget.update_content(hotkey_info["category_nav"], hotkey_info["nav"])
+        self.action_help_widget.update_content(hotkey_info["category_action"], hotkey_info["action"])
+
+        # Execute dialog
+        result = dialog.exec()
+
+        # Restore previous hotkey state
+        self.nav_help_widget.update_content(saved_nav_category, saved_nav_text)
+        self.action_help_widget.update_content(saved_action_category, saved_action_text)
+
+        return result
+
     def handle_simple_generate(self, event):
         password = generate_password()
         QApplication.clipboard().setText(password)
@@ -402,7 +431,7 @@ class MainWindow(QMainWindow):
 
     def handle_advanced_generate(self, event):
         dialog = PasswordGeneratorDialog(self, show_status_callback=self.show_status)
-        dialog.exec()
+        self._exec_dialog_with_hotkeys(dialog)
         return True
 
     def handle_help(self, event):
@@ -544,7 +573,7 @@ class MainWindow(QMainWindow):
         if self.details_widget.is_dirty:
             dialog = ConfirmationDialog(self)
             dialog.message_label.setText("You have unsaved changes. Discard them?")
-            if dialog.exec() != QDialog.Accepted:
+            if self._exec_dialog_with_hotkeys(dialog) != QDialog.Accepted:
                 return
 
         self.update_help_text("search")

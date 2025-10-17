@@ -130,11 +130,13 @@ class SecretCreateWidget(QWidget):
         namespace_colors=None,
         namespaces=None,
         namespace_resources=None,
+        exec_dialog_callback=None,
     ):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
         self.show_status = show_status_callback
+        self.exec_dialog_callback = exec_dialog_callback
         self.field_rows = []
         self.is_dirty = False
         self.namespace_colors = namespace_colors or {}
@@ -284,13 +286,13 @@ class SecretCreateWidget(QWidget):
         resource_input_layout.setSpacing(12)
 
         # Label for resource name
-        resource_label = QLabel("Resource:")
-        resource_label.setStyleSheet(
+        self.resource_label = QLabel("Resource:")
+        self.resource_label.setStyleSheet(
             f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;"
         )
-        resource_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
-        resource_label.setFixedWidth(150)
-        resource_input_layout.addWidget(resource_label)
+        self.resource_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+        self.resource_label.setFixedWidth(150)
+        resource_input_layout.addWidget(self.resource_label)
 
         # Resource input
         self.resource_input = StyledLineEdit()
@@ -735,7 +737,7 @@ class SecretCreateWidget(QWidget):
                 cancel_text="Cancel",
                 third_button_text="Save",
             )
-            result = dialog.exec()
+            result = self.exec_dialog_callback(dialog)
             if result == QDialog.Rejected:  # Cancel
                 return
             elif result == dialog.third_button_role:  # Save
@@ -809,7 +811,7 @@ class SecretCreateWidget(QWidget):
 
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText(f"Create secret '[{namespace}] {resource}'?")
-        if dialog.exec() == QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) == QDialog.Accepted:
             self._save_new_secret()
 
     def _save_new_secret(self):
@@ -1004,22 +1006,60 @@ class SecretCreateWidget(QWidget):
         )
 
     def _on_editing_state_changed(self, container, is_editing):
-        """Change border color based on editing state"""
+        """Change border color and field styles based on editing state"""
+        # Check if this is resource_input_container
+        is_resource_input = container == self.resource_input_container
+
+        # Find the row data for this container
+        row_data = None
+        if not is_resource_input:
+            for row in self.field_rows:
+                if row["container"] == container:
+                    row_data = row
+                    break
+
         if is_editing:
             # Yellow border for editing mode
             container.setStyleSheet(
                 "QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }"
             )
 
+            # Apply yellow styling to resource_input
+            if is_resource_input:
+                # Yellow color for label
+                self.resource_label.setStyleSheet(
+                    "color: #f9e2af; font-size: 16px; font-weight: bold; border: none;"
+                )
+                # Yellow border and text for input
+                self.resource_input.setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
+                )
+                self.state_changed.emit("create_editing")
+                return
+
+            # Apply yellow styling to inputs
+            if row_data:
+                # Yellow border and text for key input
+                if row_data["key_editable"]:
+                    row_data["key_input"].setStyleSheet(
+                        "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
+                    )
+                else:
+                    row_data["key_input"].setStyleSheet(
+                        "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.05); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
+                    )
+                # Yellow border and text for value input
+                row_data["value_input"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
+                )
+
             # Check if this is a new field (editable key with empty values)
             is_new_field = False
-            for row in self.field_rows:
-                if row["container"] == container and row["key_editable"]:
-                    key = row["key_input"].text().strip()
-                    value = row["value_input"].text().strip()
-                    if not key and not value:
-                        is_new_field = True
-                        break
+            if row_data and row_data["key_editable"]:
+                key = row_data["key_input"].text().strip()
+                value = row_data["value_input"].text().strip()
+                if not key and not value:
+                    is_new_field = True
 
             # Emit appropriate state
             if is_new_field:
@@ -1031,6 +1071,36 @@ class SecretCreateWidget(QWidget):
             container.setStyleSheet(
                 "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
             )
+
+            # Restore normal styling to resource_input
+            if is_resource_input:
+                # Restore normal color for label
+                self.resource_label.setStyleSheet(
+                    f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;"
+                )
+                # Restore normal border and text for input
+                self.resource_input.setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+                )
+                self.state_changed.emit("create")
+                return
+
+            # Restore normal styling
+            if row_data:
+                # Normal border and text for key input
+                if row_data["key_editable"]:
+                    row_data["key_input"].setStyleSheet(
+                        "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+                    )
+                else:
+                    row_data["key_input"].setStyleSheet(
+                        "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); color: #a6adc8; } QLineEdit:focus { border: 2px solid #89b4fa; }"
+                    )
+                # Normal border and text for value input
+                row_data["value_input"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+                )
+
             # Return to normal create mode
             self.state_changed.emit("create")
 

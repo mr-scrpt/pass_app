@@ -3,7 +3,6 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
-from components.hotkey_help import HotkeyHelpWidget
 from fa_keyboard_icons import get_fa_keyboard_icon
 from ui_theme import extra
 
@@ -12,6 +11,7 @@ class ConfirmationDialog(QDialog):
     def __init__(
         self, parent=None, text="Are you sure?", confirm_text="Confirm", cancel_text="Cancel", third_button_text=None
     ):
+        self.third_button_text = third_button_text
         super().__init__(parent)
         self.setWindowTitle("Confirm Action")
         self.setModal(True)
@@ -116,18 +116,24 @@ class ConfirmationDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-        # --- Hotkey Help Widget ---
-        if third_button_text:
-            # With third button (Save)
-            self.help_widget = HotkeyHelpWidget(
-                category="Actions", text="Enter - Confirm  |  Ctrl+S - Save  |  Esc - Cancel"
-            )
-        else:
-            # Standard confirmation
-            self.help_widget = HotkeyHelpWidget(category="Actions", text="Enter - Confirm  |  Esc - Cancel")
-        layout.addWidget(self.help_widget)
-
         self.setStyleSheet(f"background-color: {extra['secondaryColor']};")
+
+    def get_hotkey_info(self):
+        """Return hotkey help text for this dialog"""
+        if self.third_button_text:
+            return {
+                "category_nav": "Navigation",
+                "nav": "",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Ctrl+S - Save  |  Esc - Cancel",
+            }
+        else:
+            return {
+                "category_nav": "Navigation",
+                "nav": "",
+                "category_action": "Actions",
+                "action": "Enter - Confirm  |  Esc - Cancel",
+            }
 
     def on_third_button_clicked(self):
         self.done(self.third_button_role)

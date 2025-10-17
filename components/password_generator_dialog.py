@@ -11,12 +11,21 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from components.hotkey_help import HotkeyHelpWidget
 from fa_keyboard_icons import get_fa_keyboard_icon
 from utils import generate_password
 
 
 class PasswordGeneratorDialog(QDialog):
+    @staticmethod
+    def get_hotkey_info():
+        """Return hotkey help text for this dialog"""
+        return {
+            "category_nav": "Navigation",
+            "nav": "Up/Down - Navigate fields  |  Left/Right - Adjust length  |  Space - Toggle option",
+            "category_action": "Actions",
+            "action": "Enter - Copy & close  |  Ctrl+C - Copy  |  Esc - Cancel",
+        }
+
     def __init__(self, parent=None, show_status_callback=None):
         super().__init__(parent)
         self.setWindowTitle("Password Generator")
@@ -123,18 +132,6 @@ class PasswordGeneratorDialog(QDialog):
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.copy_button)
         main_layout.addLayout(button_layout)
-
-        # --- Hotkey Help Widgets ---
-        self.nav_help_widget = HotkeyHelpWidget(
-            category="Navigation",
-            text="Up/Down - Navigate fields  |  Left/Right - Adjust length  |  Space - Toggle option",
-        )
-        main_layout.addWidget(self.nav_help_widget)
-
-        self.action_help_widget = HotkeyHelpWidget(
-            category="Actions", text="Enter - Copy & close  |  Ctrl+C - Copy  |  Esc - Cancel"
-        )
-        main_layout.addWidget(self.action_help_widget)
 
         # --- Connections & Initial State ---
         self.length_spinbox.valueChanged.connect(self._regenerate_password)

@@ -24,10 +24,11 @@ from ui_theme import extra
 class SecretDetailWidget(QWidget):
     state_changed = Signal(str)  # Emits the name of the new state
 
-    def __init__(self, back_callback, save_callback, show_status_callback):
+    def __init__(self, back_callback, save_callback, show_status_callback, exec_dialog_callback):
         super().__init__()
         self.back_callback = back_callback
         self.save_callback = save_callback
+        self.exec_dialog_callback = exec_dialog_callback
         self.show_status = show_status_callback
         self.field_rows = []
         self.new_rows = []
@@ -243,7 +244,7 @@ class SecretDetailWidget(QWidget):
         key_edit = StyledLineEdit()
         key_edit.setPlaceholderText("Field Name")
         key_edit.setStyleSheet(
-            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
         )
         key_edit.textChanged.connect(self._check_for_changes)
         key_edit.navigation.connect(self._handle_navigation)
@@ -252,7 +253,7 @@ class SecretDetailWidget(QWidget):
         value_edit = StyledLineEdit()
         value_edit.setPlaceholderText("Field Value")
         value_edit.setStyleSheet(
-            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+            "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
         )
         value_edit.textChanged.connect(self._check_for_changes)
         value_edit.navigation.connect(self._handle_navigation)
@@ -378,7 +379,7 @@ class SecretDetailWidget(QWidget):
 
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText(f"Add field '{key}' to the secret?")
-        if dialog.exec() != QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) != QDialog.Accepted:
             return False
 
         self._remove_new_field_row(row_data)
@@ -450,7 +451,7 @@ class SecretDetailWidget(QWidget):
             return
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText("Apply changes to this field?")
-        if dialog.exec() == QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) == QDialog.Accepted:
             row["orig_key"] = new_key
             row["orig_val"] = new_value
             self._exit_deep_edit_mode(index, reset_values=False)
@@ -467,7 +468,7 @@ class SecretDetailWidget(QWidget):
 
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText("Discard changes to this field?")
-        if dialog.exec() == QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) == QDialog.Accepted:
             self._exit_deep_edit_mode(index, reset_values=True)
 
     def _handle_esc_in_new_field(self, row_data):
@@ -485,7 +486,7 @@ class SecretDetailWidget(QWidget):
             cancel_text="Cancel",
             third_button_text="Discard",
         )
-        result = dialog.exec()
+        result = self.exec_dialog_callback(dialog)
 
         if result == QDialog.Accepted:
             self._confirm_and_convert_field(row_data)
@@ -500,7 +501,7 @@ class SecretDetailWidget(QWidget):
             return
         dialog = ConfirmationDialog(self)
         dialog.message_label.setText("Permanently delete this field?")
-        if dialog.exec() == QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) == QDialog.Accepted:
             self._delete_row(index)
 
     def _delete_row(self, index):
@@ -525,7 +526,7 @@ class SecretDetailWidget(QWidget):
                 cancel_text="Cancel",
                 third_button_text="Save",
             )
-            result = dialog.exec()
+            result = self.exec_dialog_callback(dialog)
             if result == QDialog.Rejected:  # Cancel
                 return
             elif result == dialog.third_button_role:  # Save
@@ -584,7 +585,7 @@ class SecretDetailWidget(QWidget):
                 self.new_rows[0]["key_le"].setFocus()
             return
         dialog = ConfirmationDialog(self)
-        if dialog.exec() == QDialog.Accepted:
+        if self.exec_dialog_callback(dialog) == QDialog.Accepted:
             self._save_changes()
 
     def _save_changes(self):
@@ -667,17 +668,52 @@ class SecretDetailWidget(QWidget):
                 self.show_status("")
 
     def _on_editing_state_changed(self, container, is_editing):
-        """Change border color based on editing state"""
+        """Change border color and field styles based on editing state"""
+        # Find the row data for this container
+        row_data = None
+        for row in self.field_rows:
+            if row["container"] == container:
+                row_data = row
+                break
+
         if is_editing:
             # Yellow border for editing mode
             container.setStyleSheet(
                 "QWidget { background-color: transparent; border-left: 3px solid #f9e2af; padding-left: 8px; }"
             )
+            # Apply yellow styling to label and inputs
+            if row_data:
+                # Yellow color for label text
+                row_data["label"].setStyleSheet(
+                    "color: #f9e2af; font-size: 16px; font-weight: bold; border: none;"
+                )
+                # Yellow border and text for key input (in deep edit mode)
+                row_data["key_le"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.1); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; }"
+                )
+                # Yellow border and text for value input
+                row_data["le"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid #f9e2af; background-color: rgba(255, 255, 255, 0.05); color: #f9e2af; } QLineEdit:focus { border: 2px solid #f9e2af; } QLineEdit:!read-only { background-color: rgba(255, 255, 255, 0.1); }"
+                )
         else:
             # Blue border for navigation mode
             container.setStyleSheet(
                 "QWidget { background-color: transparent; border-left: 3px solid #89b4fa; padding-left: 8px; }"
             )
+            # Restore normal styling
+            if row_data:
+                # Blue color for label text
+                row_data["label"].setStyleSheet(
+                    f"color: {extra['primaryColor']}; font-size: 16px; font-weight: bold; border: none;"
+                )
+                # Normal border and text for key input
+                row_data["key_le"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.1); } QLineEdit:focus { border: 2px solid #89b4fa; }"
+                )
+                # Normal border and text for value input
+                row_data["le"].setStyleSheet(
+                    "QLineEdit { font-size: 16px; padding: 8px; border: 2px solid transparent; background-color: rgba(255, 255, 255, 0.05); } QLineEdit:focus { border: 2px solid #89b4fa; } QLineEdit:!read-only { background-color: rgba(255, 255, 255, 0.1); }"
+                )
 
     def _toggle_visibility(self, line_edit, button):
         if line_edit.echoMode() == QLineEdit.Password:
@@ -742,7 +778,7 @@ class SecretDetailWidget(QWidget):
                 return
 
             if key in (Qt.Key_Return, Qt.Key_Enter):
-                self._copy_to_clipboard(row_data["le"].text())
+                self._enable_editing(row_data["le"])
                 return
 
             if key == Qt.Key_Down or (key == Qt.Key_Tab and modifiers == Qt.NoModifier):
@@ -752,17 +788,13 @@ class SecretDetailWidget(QWidget):
                 self._focus_field((self.current_field_index - 1) % len(self.field_rows))
                 return
 
-            if modifiers == (Qt.ControlModifier | Qt.ShiftModifier) and key == Qt.Key_E:
-                self._enter_deep_edit_mode(self.current_field_index)
-                return
-
             if modifiers == Qt.ControlModifier:
                 if key == Qt.Key_S:
                     self._prompt_to_save()
                 elif key == Qt.Key_C:
                     self._copy_to_clipboard(row_data["le"].text())
                 elif key == Qt.Key_E:
-                    self._enable_editing(row_data["le"])
+                    self._enter_deep_edit_mode(self.current_field_index)
                 elif key == Qt.Key_T:
                     self._toggle_visibility(row_data["le"], row_data["toggle_btn"])
                 elif key == Qt.Key_D:
