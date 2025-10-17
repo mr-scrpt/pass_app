@@ -1,8 +1,8 @@
-# Installation Guide for Pass Suite
+# Installation Guide for Pass Keyboard Control
 
 ## Prerequisites
 
-Before installing Pass Suite, make sure you have:
+Before installing Pass Keyboard Control, make sure you have:
 
 1. **Python 3.8+** installed
 2. **pass** (password-store) installed and configured
@@ -32,7 +32,7 @@ cd /home/mr/Hellkitchen/solution/pass/project
 # Install dependencies
 pip install -r requirements.txt
 
-# Install Pass Suite
+# Install Pass Keyboard Control
 pip install .
 
 # Run the application
@@ -76,7 +76,7 @@ cd /home/mr/Hellkitchen/solution/pass/project
 ./build_package.sh
 
 # Install the wheel
-pip install dist/pass_suite-*.whl
+pip install dist/pass_keyboard_control-*.whl
 ```
 
 ## Post-Installation
@@ -87,7 +87,7 @@ Create `~/.local/share/applications/pass-suite.desktop`:
 
 ```ini
 [Desktop Entry]
-Name=Pass Suite
+Name=Pass Keyboard Control
 Comment=Modern GUI for Unix password manager
 Exec=pass-suite
 Icon=dialog-password
@@ -163,9 +163,9 @@ rm ~/.local/share/applications/pass-suite.desktop
 # On source machine
 ./build_package.sh
 
-# Copy dist/pass_suite-*.whl to target machine
+# Copy dist/pass_keyboard_control-*.whl to target machine
 # On target machine
-pip install pass_suite-*.whl
+pip install pass_keyboard_control-*.whl
 ```
 
 ### Option 2: Share Standalone Executable

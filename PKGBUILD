@@ -1,10 +1,10 @@
 # Maintainer: Your Name <your.email@example.com>
-pkgname=pass-cli-with-keyboard-total-control
+pkgname=pass-keyboard-control
 pkgver=1.0.0
 pkgrel=1
 pkgdesc="AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control"
 arch=('any')
-url="https://github.com/yourusername/pass-cli-with-keyboard-total-control"
+url="https://github.com/yourusername/pass-keyboard-control"
 license=('MIT')
 depends=(
     'python'

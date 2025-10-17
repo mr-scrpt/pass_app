@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup script for Pass Suite GUI application."""
+"""Setup script for Pass Keyboard Control application."""
 
 import os
 
@@ -16,14 +16,14 @@ def read_file(filename):
 
 
 setup(
-    name="pass-cli-with-keyboard-total-control",
+    name="pass-keyboard-control",
     version="1.0.0",
     description="AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
     author="Your Name",
     author_email="your.email@example.com",
-    url="https://github.com/yourusername/pass-cli-with-keyboard-total-control",
+    url="https://github.com/yourusername/pass-keyboard-control",
     license="MIT",
     # Package configuration
     packages=find_packages(),

@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pass-cli-with-keyboard-total-control"
+name = "pass-keyboard-control"
 version = "1.0.0"
 description = "AI-generated keyboard-driven GUI for Unix password manager (pass) with total keyboard control"
 readme = "README.md"
@@ -49,10 +49,10 @@ pass-kb = "pass_client:main"
 pass-kb-gui = "pass_client:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pass-cli-with-keyboard-total-control"
-Documentation = "https://github.com/yourusername/pass-cli-with-keyboard-total-control/wiki"
-Repository = "https://github.com/yourusername/pass-cli-with-keyboard-total-control"
-"Bug Tracker" = "https://github.com/yourusername/pass-cli-with-keyboard-total-control/issues"
+Homepage = "https://github.com/yourusername/pass-keyboard-control"
+Documentation = "https://github.com/yourusername/pass-keyboard-control/wiki"
+Repository = "https://github.com/yourusername/pass-keyboard-control"
+"Bug Tracker" = "https://github.com/yourusername/pass-keyboard-control/issues"
 
 [tool.setuptools]
 packages = ["components"]

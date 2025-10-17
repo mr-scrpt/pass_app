@@ -1,4 +1,4 @@
-# Руководство по распространению приложения Pass Suite
+# Руководство по распространению приложения Pass Keyboard Control
 
 ## Обзор инфраструктуры
 
@@ -55,7 +55,7 @@ Keywords=password;manager;pass;...   # Ключевые слова для пои
 
 **Структура:**
 ```bash
-pkgname=pass-cli-with-keyboard-total-control  # Имя пакета в AUR
+pkgname=pass-keyboard-control  # Имя пакета в AUR
 pkgver=1.0.0                                  # Версия
 depends=('python' 'python-pyside6' ...)       # Зависимости
 ```
@@ -129,7 +129,7 @@ makepkg -si
 # 2. Настройте SSH ключи
 
 # 3. Клонируйте пустой AUR репозиторий
-git clone ssh://aur@aur.archlinux.org/pass-cli-with-keyboard-total-control.git aur-repo
+git clone ssh://aur@aur.archlinux.org/pass-keyboard-control.git aur-repo
 cd aur-repo
 
 # 4. Скопируйте PKGBUILD и .SRCINFO

@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self.namespace_colors = {}
         self.namespace_resources = {}  # {namespace: [resource1, resource2, ...]}
         self.current_selected_item = None
-        self.setWindowTitle("Pass Suite")
+        self.setWindowTitle("Pass Keyboard Control")
         self.resize(800, 600)
 
         self.hotkey_manager = HotkeyManager()
